@@ -1,0 +1,134 @@
+<program>           ::= <statement_list>
+
+<statement_list>    ::= <statement>
+                     | <statement> <statement_list>
+
+<statement>         ::= <simple_stmt>
+                     | <compound_stmt>
+
+<simple_stmt>       ::= <assignment>
+                     | <expr_stmt>
+                     | <print_stmt>
+                     | <return_stmt>
+
+// Note: <primary> on the left allows for assignments like table[expr] = value.
+// Semantic checks would ensure the <primary> is a valid L-value.
+<assignment>        ::= <primary> "=" <expression>
+
+<expr_stmt>         ::= <expression>
+
+<print_stmt>        ::= "print" "(" <expression_list_opt> ")"
+
+<return_stmt>       ::= "return" <expression_opt>
+
+<compound_stmt>     ::= <if_stmt>
+                     | <while_stmt>
+                     | <for_stmt>
+                     | <function_def>
+
+<if_stmt>           ::= "if" <expression> <block>
+                       <elseif_list_opt>
+                       <else_block_opt>
+
+<elseif_list_opt>   ::= /* empty */
+                     | <elseif_list>
+
+<elseif_list>      ::= <elseif>
+                     | <elseif> <elseif_list>
+
+<elseif>           ::= "elseif" <expression> <block>
+
+<else_block_opt>    ::= /* empty */
+                     | "else" <block>
+
+<while_stmt>        ::= "while" <expression> <block>
+
+<for_stmt>          ::= "for" <identifier> "in" <expression> <block>
+
+// Defines an anonymous function; assign to an identifier to name it.
+<function_def>      ::= "function" "(" <param_list_opt> ")" <block>
+
+<block>             ::= "{" <statement_list_opt> "}"
+
+<statement_list_opt>::= /* empty */
+                     | <statement_list>
+
+<expression_opt>    ::= /* empty */
+                     | <expression>
+
+<expression_list_opt>::= /* empty */
+                        | <expression_list>
+
+<expression_list>   ::= <expression>
+                     | <expression> "," <expression_list>
+
+<param_list_opt>    ::= /* empty */
+                     | <param_list>
+
+<param_list>        ::= <identifier>
+                     | <identifier> "," <param_list>
+
+<expression>        ::= <logical_or>
+
+<logical_or>        ::= <logical_and>
+                     | <logical_or> "or" <logical_and>
+
+<logical_and>       ::= <comparison>
+                     | <logical_and> "and" <comparison>
+
+<comparison>        ::= <arith>
+                     | <comparison> ("==" | "!=" | "<" | ">" | "<=" | ">=") <arith>
+
+<arith>             ::= <term>
+                     | <arith> ("+" | "-") <term>
+
+<term>              ::= <factor>
+                     | <term> ("*" | "/" | "%") <factor>
+
+<factor>            ::= <unary>
+                     | <factor> "^" <unary>    /* exponentiation */
+
+<unary>             ::= ("+" | "-" | "not") <unary>
+                     | <primary>
+
+// <primary> now handles base expressions, function calls, and index access.
+// It's left-recursive to allow chaining like obj[index1][index2]()
+<primary>           ::= <atom>
+                     | <primary> "[" <expression> "]"            // Table/List index access
+                     | <primary> "(" <expression_list_opt> ")"   // Function call
+
+// <atom> represents the simplest primary expressions.
+<atom>              ::= <literal>
+                     | <identifier>
+                     | <list_literal>
+                     | <table_literal>
+                     | "(" <expression> ")"
+
+<list_literal>      ::= "[" <expression_list_opt> "]"
+
+<table_literal>     ::= "{" <field_list_opt> "}"
+
+<field_list_opt>    ::= /* empty */
+                     | <field_list>
+
+<field_list>        ::= <field>
+                     | <field> "," <field_list>
+
+<field>             ::= <identifier> "=" <expression>  // Table field example: { name = "value" }
+
+<literal>           ::= <integer>
+                     | <float>
+                     | <string>
+                     | <boolean>
+                     | "nil"  // Often useful to have a dedicated nil/null literal
+
+<integer>           ::= <digit>+
+<float>             ::= <digit>+ "." <digit>+
+<string>            ::= "\"" <string_contents> "\""
+<boolean>           ::= "true" | "false"
+
+<identifier>        ::= <letter> ( <letter> | <digit> | "_" )*
+
+<digit>             ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+<letter>            ::= "a" | ... | "z" | "A" | ... | "Z" | "_"
+<string_contents>   ::= /* any characters except quote, handles escape sequences */

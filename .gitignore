@@ -1,0 +1,12 @@
+# Go
+/bin/
+/pkg/
+/*.exe
+/*.out
+/*.test
+*.swp
+.DS_Store
+
+# IDE/editor
+.vscode/
+.idea/
