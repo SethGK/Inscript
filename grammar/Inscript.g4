@@ -46,8 +46,8 @@ paramList           : IDENTIFIER (',' IDENTIFIER)*; // Changed: identifier -> ID
 expression          : logicalOr;
 logicalOr           : logicalAnd ('or' logicalAnd)*;
 logicalAnd          : comparison ('and' comparison)*;
-comparison          : arith (('==' | '!=' | '<' | '>' | '<=' | '>=') arith)*;
-arith               : term (('+' | '-') term)*;
+comparison          : arith ( cmpOp=('==' | '!=' | '<' | '>' | '<=' | '>=') arith )*;
+arith               : term ( op=('+' | '-') term )*;
 term                : factor (('*' | '/' | '%') factor)*;
 factor              : unary ('^' unary)*;
 unary               : ('+' | '-' | 'not') unary

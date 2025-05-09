@@ -1,8 +1,10 @@
-module github.com/SethGK/Inscript.git
+module github.com/SethGK/Inscript
 
 go 1.23.5
 
 require (
-	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	github.com/antlr4-go/antlr v0.0.0-20230518091524-98b52378c522
+	github.com/antlr4-go/antlr/v4 v4.13.1
 )
+
+require golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/SethGK/Inscript.git/internal/vm"
+	"github.com/SethGK/Inscript/internal/vm"
 )
 
 func main() {
