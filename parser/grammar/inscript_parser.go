@@ -1,6 +1,6 @@
 // Code generated from grammar/Inscript.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
-package parser // Inscript
+package grammar // Inscript
 import (
 	"fmt"
 	"strconv"
@@ -40,7 +40,7 @@ func inscriptParserInit() {
 	staticData.SymbolicNames = []string{
 		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
 		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
-		"IDENTIFIER", "INTEGER", "FLOAT", "STRING", "BOOLEAN", "WS", "LINE_COMMENT",
+		"BOOLEAN", "IDENTIFIER", "INTEGER", "FLOAT", "STRING", "WS", "LINE_COMMENT",
 		"BLOCK_COMMENT",
 	}
 	staticData.RuleNames = []string{
@@ -89,7 +89,7 @@ func inscriptParserInit() {
 		39, 0, 0, 40, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
 		32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66,
 		68, 70, 72, 74, 76, 78, 0, 5, 1, 0, 18, 23, 1, 0, 24, 25, 1, 0, 26, 28,
-		2, 0, 24, 25, 30, 30, 2, 0, 33, 33, 35, 38, 291, 0, 80, 1, 0, 0, 0, 2,
+		2, 0, 24, 25, 30, 30, 2, 0, 33, 34, 36, 38, 291, 0, 80, 1, 0, 0, 0, 2,
 		84, 1, 0, 0, 0, 4, 90, 1, 0, 0, 0, 6, 96, 1, 0, 0, 0, 8, 98, 1, 0, 0, 0,
 		10, 102, 1, 0, 0, 0, 12, 104, 1, 0, 0, 0, 14, 109, 1, 0, 0, 0, 16, 116,
 		1, 0, 0, 0, 18, 118, 1, 0, 0, 0, 20, 126, 1, 0, 0, 0, 22, 129, 1, 0, 0,
@@ -124,7 +124,7 @@ func inscriptParserInit() {
 		0, 0, 137, 141, 1, 0, 0, 0, 138, 139, 5, 8, 0, 0, 139, 141, 3, 34, 17,
 		0, 140, 137, 1, 0, 0, 0, 140, 138, 1, 0, 0, 0, 141, 27, 1, 0, 0, 0, 142,
 		143, 5, 9, 0, 0, 143, 144, 3, 48, 24, 0, 144, 145, 3, 34, 17, 0, 145, 29,
-		1, 0, 0, 0, 146, 147, 5, 10, 0, 0, 147, 148, 5, 34, 0, 0, 148, 149, 5,
+		1, 0, 0, 0, 146, 147, 5, 10, 0, 0, 147, 148, 5, 35, 0, 0, 148, 149, 5,
 		11, 0, 0, 149, 150, 3, 48, 24, 0, 150, 151, 3, 34, 17, 0, 151, 31, 1, 0,
 		0, 0, 152, 153, 5, 12, 0, 0, 153, 154, 5, 3, 0, 0, 154, 155, 3, 44, 22,
 		0, 155, 156, 5, 4, 0, 0, 156, 157, 3, 34, 17, 0, 157, 33, 1, 0, 0, 0, 158,
@@ -138,7 +138,7 @@ func inscriptParserInit() {
 		0, 178, 181, 1, 0, 0, 0, 179, 177, 1, 0, 0, 0, 179, 180, 1, 0, 0, 0, 180,
 		43, 1, 0, 0, 0, 181, 179, 1, 0, 0, 0, 182, 185, 1, 0, 0, 0, 183, 185, 3,
 		46, 23, 0, 184, 182, 1, 0, 0, 0, 184, 183, 1, 0, 0, 0, 185, 45, 1, 0, 0,
-		0, 186, 191, 5, 34, 0, 0, 187, 188, 5, 15, 0, 0, 188, 190, 5, 34, 0, 0,
+		0, 186, 191, 5, 35, 0, 0, 187, 188, 5, 15, 0, 0, 188, 190, 5, 35, 0, 0,
 		189, 187, 1, 0, 0, 0, 190, 193, 1, 0, 0, 0, 191, 189, 1, 0, 0, 0, 191,
 		192, 1, 0, 0, 0, 192, 47, 1, 0, 0, 0, 193, 191, 1, 0, 0, 0, 194, 195, 3,
 		50, 25, 0, 195, 49, 1, 0, 0, 0, 196, 201, 3, 52, 26, 0, 197, 198, 5, 16,
@@ -165,7 +165,7 @@ func inscriptParserInit() {
 		256, 3, 40, 20, 0, 256, 257, 5, 4, 0, 0, 257, 259, 1, 0, 0, 0, 258, 250,
 		1, 0, 0, 0, 258, 254, 1, 0, 0, 0, 259, 262, 1, 0, 0, 0, 260, 258, 1, 0,
 		0, 0, 260, 261, 1, 0, 0, 0, 261, 65, 1, 0, 0, 0, 262, 260, 1, 0, 0, 0,
-		263, 272, 3, 78, 39, 0, 264, 272, 5, 34, 0, 0, 265, 272, 3, 68, 34, 0,
+		263, 272, 3, 78, 39, 0, 264, 272, 5, 35, 0, 0, 265, 272, 3, 68, 34, 0,
 		266, 272, 3, 70, 35, 0, 267, 268, 5, 3, 0, 0, 268, 269, 3, 48, 24, 0, 269,
 		270, 5, 4, 0, 0, 270, 272, 1, 0, 0, 0, 271, 263, 1, 0, 0, 0, 271, 264,
 		1, 0, 0, 0, 271, 265, 1, 0, 0, 0, 271, 266, 1, 0, 0, 0, 271, 267, 1, 0,
@@ -176,7 +176,7 @@ func inscriptParserInit() {
 		0, 0, 0, 284, 73, 1, 0, 0, 0, 285, 290, 3, 76, 38, 0, 286, 287, 5, 15,
 		0, 0, 287, 289, 3, 76, 38, 0, 288, 286, 1, 0, 0, 0, 289, 292, 1, 0, 0,
 		0, 290, 288, 1, 0, 0, 0, 290, 291, 1, 0, 0, 0, 291, 75, 1, 0, 0, 0, 292,
-		290, 1, 0, 0, 0, 293, 294, 5, 34, 0, 0, 294, 295, 5, 1, 0, 0, 295, 296,
+		290, 1, 0, 0, 0, 293, 294, 5, 35, 0, 0, 294, 295, 5, 1, 0, 0, 295, 296,
 		3, 48, 24, 0, 296, 77, 1, 0, 0, 0, 297, 298, 7, 4, 0, 0, 298, 79, 1, 0,
 		0, 0, 25, 86, 90, 96, 116, 126, 131, 140, 164, 168, 172, 179, 184, 191,
 		201, 209, 217, 225, 233, 241, 247, 258, 260, 271, 283, 290,
@@ -251,11 +251,11 @@ const (
 	InscriptParserT__30         = 31
 	InscriptParserT__31         = 32
 	InscriptParserT__32         = 33
-	InscriptParserIDENTIFIER    = 34
-	InscriptParserINTEGER       = 35
-	InscriptParserFLOAT         = 36
-	InscriptParserSTRING        = 37
-	InscriptParserBOOLEAN       = 38
+	InscriptParserBOOLEAN       = 34
+	InscriptParserIDENTIFIER    = 35
+	InscriptParserINTEGER       = 36
+	InscriptParserFLOAT         = 37
+	InscriptParserSTRING        = 38
 	InscriptParserWS            = 39
 	InscriptParserLINE_COMMENT  = 40
 	InscriptParserBLOCK_COMMENT = 41
@@ -709,7 +709,7 @@ func (p *InscriptParser) Statement() (localctx IStatementContext) {
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING, InscriptParserBOOLEAN:
+	case InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 1)
 		{
 			p.SetState(88)
@@ -1942,7 +1942,7 @@ func (p *InscriptParser) ElseifListOpt() (localctx IElseifListOptContext) {
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__7, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING, InscriptParserBOOLEAN:
+	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__7, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 1)
 
 	case InscriptParserT__6:
@@ -2373,7 +2373,7 @@ func (p *InscriptParser) ElseBlockOpt() (localctx IElseBlockOptContext) {
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING, InscriptParserBOOLEAN:
+	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 1)
 
 	case InscriptParserT__7:
@@ -3110,7 +3110,7 @@ func (p *InscriptParser) StatementListOpt() (localctx IStatementListOptContext) 
 	case InscriptParserT__13:
 		p.EnterOuterAlt(localctx, 1)
 
-	case InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING, InscriptParserBOOLEAN:
+	case InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(163)
@@ -3369,7 +3369,7 @@ func (p *InscriptParser) ExpressionListOpt() (localctx IExpressionListOptContext
 	case InscriptParserT__3, InscriptParserT__31:
 		p.EnterOuterAlt(localctx, 1)
 
-	case InscriptParserT__2, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING, InscriptParserBOOLEAN:
+	case InscriptParserT__2, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(171)
@@ -5166,7 +5166,7 @@ func (p *InscriptParser) Unary() (localctx IUnaryContext) {
 			p.Unary()
 		}
 
-	case InscriptParserT__2, InscriptParserT__12, InscriptParserT__30, InscriptParserT__32, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING, InscriptParserBOOLEAN:
+	case InscriptParserT__2, InscriptParserT__12, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(246)
@@ -5629,7 +5629,7 @@ func (p *InscriptParser) Atom() (localctx IAtomContext) {
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case InscriptParserT__32, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING, InscriptParserBOOLEAN:
+	case InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 1)
 		{
 			p.SetState(263)
@@ -6502,7 +6502,7 @@ func (p *InscriptParser) Literal() (localctx ILiteralContext) {
 		p.SetState(297)
 		_la = p.GetTokenStream().LA(1)
 
-		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&523986010112) != 0) {
+		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&506806140928) != 0) {
 			p.GetErrorHandler().RecoverInline(p)
 		} else {
 			p.GetErrorHandler().ReportMatch(p)

@@ -80,18 +80,24 @@ func GoBoolToBoolean(input bool) *Boolean {
 }
 
 // IsTruthy checks if a Value is considered "truthy" in the language.
-// Typically, nil and false are falsy, everything else is truthy.
+// Typically, nil, false, and zero values (0, 0.0, empty strings/collections) are falsy.
+// Everything else is truthy.
 func IsTruthy(obj Value) bool {
-	switch obj {
-	case NULL:
+	switch obj := obj.(type) { // Use type assertion to check underlying type
+	case *Null:
 		return false
-	case TRUE:
-		return true
-	case FALSE:
-		return false
+	case *Boolean:
+		return obj.Value
+	case *Integer:
+		return obj.Value != 0 // Integer 0 is falsy
+	case *Float:
+		return obj.Value != 0.0 // Float 0.0 is falsy
+	case *String:
+		return obj.Value != "" // Empty string is falsy (assuming this rule)
+	// TODO: Add cases for other types (Array, Hash, Function, etc.)
+	// Empty arrays/hashes are typically falsy. Function objects are typically truthy.
 	default:
-		// Numbers (non-zero?), strings (non-empty?), arrays (non-empty?), hashes (non-empty?), functions are typically truthy.
-		// For now, assume any non-null/non-boolean is truthy. Refine later for collection types.
+		// For unimplemented types or types not explicitly handled as falsy, assume truthy.
 		return true
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"math" // Needed for math.Pow
 
 	"github.com/SethGK/Inscript/internal/compiler" // Import the compiler package
+	// Removed: "github.com/SethGK/Inscript/internal/vm/value" // Import the new value package
 )
 
 // VM represents the virtual machine that executes bytecode.
@@ -290,6 +291,7 @@ func (vm *VM) Run() (Value, error) { // Return Value
 		case compiler.OpReturn:
 			// OpReturn from the main program indicates the end of execution.
 			// Break out of the execution loop.
+			// For function calls, this will involve popping frames.
 			break // This breaks the 'for ip < len(vm.instructions)' loop
 
 		// TODO: Implement other opcodes:
@@ -324,7 +326,7 @@ func (vm *VM) push(val Value) { // Accepts Value
 		newStack := make([]Value, len(vm.stack)*2) // Double stack size
 		copy(newStack, vm.stack)
 		vm.stack = newStack
-		fmt.Println("Stack grown to", len(vm.stack)) // For debugging
+		// fmt.Println("Stack grown to", len(vm.stack)) // For debugging
 	}
 	vm.stack[vm.sp] = val
 	vm.sp++
@@ -438,7 +440,9 @@ func (vm *VM) divide(left, right Value) (Value, error) {
 			if right.Value == 0 {
 				return nil, fmt.Errorf("runtime error: division by zero")
 			}
-			return &Integer{Value: left.Value / right.Value}, nil // Integer division
+			// Decide between integer and float division based on language rules.
+			// Current: Integer division if both are integers.
+			return &Integer{Value: left.Value / right.Value}, nil
 		case *Float:
 			if right.Value == 0 {
 				return nil, fmt.Errorf("runtime error: division by zero")
@@ -486,24 +490,22 @@ func (vm *VM) power(left, right Value) (Value, error) {
 	leftFloat, okLeftFloat := left.(*Float)
 	rightFloat, okRightFloat := right.(*Float)
 
-	if okLeftInt != okRightInt || okLeftFloat != okRightFloat {
-		// Mixed types, handle conversion
-		if okLeftInt && okRightFloat {
-			return &Float{Value: math.Pow(float64(leftInt.Value), rightFloat.Value)}, nil
-		}
-		if okLeftFloat && okRightInt {
-			return &Float{Value: math.Pow(leftFloat.Value, float64(rightInt.Value))}, nil
-		}
-	} else if okLeftInt && okRightInt {
-		// Both integers
-		// Note: Go's math.Pow operates on floats. Need to implement integer power or convert.
-		// For simplicity, let's convert to float for now.
+	// Handle mixed types by promoting to float
+	if okLeftInt && okRightFloat {
+		return &Float{Value: math.Pow(float64(leftInt.Value), rightFloat.Value)}, nil
+	}
+	if okLeftFloat && okRightInt {
+		return &Float{Value: math.Pow(leftFloat.Value, float64(rightInt.Value))}, nil
+	}
+	// Handle same types
+	if okLeftInt && okRightInt {
+		// Integer power - still using float for simplicity, might need dedicated int power func
 		result := math.Pow(float64(leftInt.Value), float64(rightInt.Value))
-		// Decide if the result should be an integer or float. If the result is a whole number, maybe integer?
-		// For now, let's return float for any power operation involving floats or resulting in large numbers.
-		return &Float{Value: result}, nil // Or implement proper integer power
-	} else if okLeftFloat && okRightFloat {
-		// Both floats
+		// Consider if result should be integer if it's a whole number
+		// For now, return float result of math.Pow
+		return &Float{Value: result}, nil
+	}
+	if okLeftFloat && okRightFloat {
 		return &Float{Value: math.Pow(leftFloat.Value, rightFloat.Value)}, nil
 	}
 
@@ -525,7 +527,7 @@ func (vm *VM) negate(operand Value) (Value, error) {
 func (vm *VM) compare(left, right Value, op string) (Value, error) {
 	// Implement comparison logic based on types and the operator.
 	// This will involve many type checks and comparisons.
-	// For simplicity, let's only compare numbers for now.
+	// For simplicity, let's only compare numbers and strings for now.
 	leftInt, okLeftInt := left.(*Integer)
 	rightInt, okRightInt := right.(*Integer)
 	leftFloat, okLeftFloat := left.(*Float)
@@ -575,7 +577,7 @@ func (vm *VM) compare(left, right Value, op string) (Value, error) {
 		case ">=":
 			return GoBoolToBoolean(leftFloat.Value >= float64(rightInt.Value)), nil
 		case "<=":
-			return GoBoolToBoolean(leftFloat.Value <= float64(rightInt.Value)), nil
+			return GoBoolToBoolean(leftFloat.Value <= float64(rightInt.Value)), nil // Corrected typo here
 		}
 	} else if okLeftStr && okRightStr {
 		// String comparisons
@@ -598,9 +600,27 @@ func (vm *VM) compare(left, right Value, op string) (Value, error) {
 func (vm *VM) isEqual(left, right Value) bool {
 	// Implement equality logic. This can be complex depending on types (e.g., comparing arrays/hashes).
 	// For basic types, compare values directly.
+	// For numbers, allow comparison between int and float.
+	leftInt, okLeftInt := left.(*Integer)
+	rightInt, okRightInt := right.(*Integer)
+	leftFloat, okLeftFloat := left.(*Float)
+	rightFloat, okRightFloat := right.(*Float)
+
+	if okLeftInt && okRightInt {
+		return leftInt.Value == rightInt.Value
+	}
+	if okLeftFloat && okRightFloat {
+		return leftFloat.Value == rightFloat.Value
+	}
+	if okLeftInt && okRightFloat {
+		return float64(leftInt.Value) == rightFloat.Value
+	}
+	if okLeftFloat && okRightInt {
+		return leftFloat.Value == float64(rightInt.Value)
+	}
+
+	// For other types, require exact type match for equality.
 	if left.Type() != right.Type() {
-		// Different types are generally not equal (unless you have specific rules, like int == float)
-		// For now, let's say different types are not equal.
 		return false
 	}
 
@@ -609,10 +629,6 @@ func (vm *VM) isEqual(left, right Value) bool {
 		return true // nil == nil
 	case *Boolean:
 		return left.Value == right.(*Boolean).Value
-	case *Integer:
-		return left.Value == right.(*Integer).Value
-	case *Float:
-		return left.Value == right.(*Float).Value
 	case *String:
 		return left.Value == right.(*String).Value
 	// TODO: Add equality for Array, Hash, Function, etc.

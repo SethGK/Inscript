@@ -30,7 +30,7 @@ elseif              : 'elseif' expression block;
 elseBlockOpt        : /* empty */ | 'else' block;
 
 whileStmt           : 'while' expression block;
-forStmt             : 'for' IDENTIFIER 'in' expression block; // Changed: identifier -> IDENTIFIER
+forStmt             : 'for' IDENTIFIER 'in' expression block;
 functionDef         : 'function' '(' paramListOpt ')' block;
 
 block               : '{' statementListOpt '}';
@@ -41,7 +41,7 @@ expressionListOpt   : /* empty */ | expressionList;
 expressionList      : expression (',' expression)*;
 
 paramListOpt        : /* empty */ | paramList;
-paramList           : IDENTIFIER (',' IDENTIFIER)*; // Changed: identifier -> IDENTIFIER
+paramList           : IDENTIFIER (',' IDENTIFIER)*;
 
 expression          : logicalOr;
 logicalOr           : logicalAnd ('or' logicalAnd)*;
@@ -56,7 +56,7 @@ unary               : ('+' | '-' | 'not') unary
 primary             : atom ( '[' expression ']' | '(' expressionListOpt ')' )*;
 
 atom                : literal
-                    | IDENTIFIER // Changed: identifier -> IDENTIFIER
+                    | IDENTIFIER
                     | listLiteral
                     | tableLiteral
                     | '(' expression ')'
@@ -66,25 +66,26 @@ listLiteral         : '[' expressionListOpt ']';
 tableLiteral        : '{' fieldListOpt '}';
 fieldListOpt        : /* empty */ | fieldList;
 fieldList           : field (',' field)*;
-field               : IDENTIFIER '=' expression; // Changed: identifier -> IDENTIFIER
+field               : IDENTIFIER '=' expression;
 
 literal             : INTEGER
                     | FLOAT
                     | STRING
-                    | BOOLEAN
+                    | BOOLEAN // Moved BOOLEAN here
                     | 'nil'
                     ;
 
 // Lexer rules
-IDENTIFIER          : LETTER (LETTER | DIGIT | '_')*; // Changed: identifier -> IDENTIFIER (now a lexer rule)
+// IMPORTANT: Order matters! BOOLEAN must come before IDENTIFIER
+BOOLEAN             : 'true' | 'false'; // Defined before IDENTIFIER
+IDENTIFIER          : LETTER (LETTER | DIGIT | '_')*;
 
 INTEGER             : DIGIT+;
 FLOAT               : DIGIT+ '.' DIGIT+;
 STRING              : '"' (ESC_SEQ | ~["\\])* '"';
-BOOLEAN             : 'true' | 'false';
 
 
-// Fragments (These are correct as helper rules for lexer rules like IDENTIFIER, INTEGER, FLOAT)
+// Fragments (These are correct as helper rules for lexer rules)
 fragment DIGIT      : [0-9];
 fragment LETTER     : [a-zA-Z_];
 fragment ESC_SEQ    : '\\' ["'\\ntbr];
