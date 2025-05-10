@@ -10,3 +10,7 @@
 # IDE/editor
 .vscode/
 .idea/
+
+#test programs
+test.ins
+inscript

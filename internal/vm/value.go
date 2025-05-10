@@ -1,6 +1,8 @@
 package vm
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Type represents the type of a runtime value.
 type Type string
@@ -21,7 +23,7 @@ type Value interface {
 	// Add methods for operations here later, e.g.,
 	// Add(Value) (Value, error)
 	// Subtract(Value) (Value, error)
-	// ... etc.
+	// ... etc. - Moved to VM helper functions for now for centralized type checking
 }
 
 // Null represents the 'nil' value.
@@ -88,8 +90,8 @@ func IsTruthy(obj Value) bool {
 	case FALSE:
 		return false
 	default:
-		// Numbers, strings, arrays, hashes, functions are typically truthy if not their zero/empty value.
-		// For now, assume any non-null/non-boolean is truthy. Refine later.
+		// Numbers (non-zero?), strings (non-empty?), arrays (non-empty?), hashes (non-empty?), functions are typically truthy.
+		// For now, assume any non-null/non-boolean is truthy. Refine later for collection types.
 		return true
 	}
 }
