@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	parser "github.com/SethGK/Inscript/parser/grammar"
-	"github.com/antlr4-go/antlr"
+	"github.com/antlr4-go/antlr/v4"
 )
 
 // ASTBuilder implements the ANTLR InscriptVisitor to build our AST.
