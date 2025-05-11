@@ -10,33 +10,6 @@ import (
 	"github.com/SethGK/Inscript/internal/types"
 )
 
-// --- Bytecode Definitions (Assuming these are in code.go within the compiler package) ---
-// (These types and functions are expected to be defined elsewhere in the 'compiler' package,
-// likely in code.go. They are not included here to avoid redundancy with your actual code.go,
-// but their names are used directly as they are in the same package.)
-
-// type OpCode byte
-// type Instructions []byte
-// type Bytecode struct { ... }
-// func Make(op OpCode, operands ...int) []byte { ... }
-// func Lookup(op OpCode) (*Definition, bool) { ... }
-// func GetLastOpcode(instrs Instructions) OpCode { ... }
-// func NewBytecode() *Bytecode { ... }
-// const ( OpConstant OpCode = iota; OpAdd; ... OpCall; OpReturnValue; OpReturn; ...)
-
-// --- Symbol Table Definitions (Assuming these are in symboltable.go within the compiler package) ---
-// (These types are expected to be defined elsewhere in the 'compiler' package,
-// likely in symboltable.go. They are not included here, but their names are used directly.)
-
-// type SymbolKind int
-// const ( Global SymbolKind = iota; Local; Parameter; Builtin; )
-// type Symbol struct { Name string; Kind SymbolKind; Index int; }
-// type SymbolTable struct { store map[string]*Symbol; Outer *SymbolTable; numDefinitions int; }
-// func NewSymbolTable() *SymbolTable { ... }
-// func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable { ... }
-// func (s *SymbolTable) Define(name string) *Symbol { ... }
-// func (s *SymbolTable) Resolve(name string) (*Symbol, bool) { ... }
-
 // Compiler translates an AST into bytecode.
 type Compiler struct {
 	// The bytecode being compiled for the current compilation unit (program or function)
@@ -46,8 +19,7 @@ type Compiler struct {
 	// Global symbol table (unique for the entire program)
 	// This is shared across all function compilers.
 	globals *SymbolTable // Referring to SymbolTable (defined in symboltable.go, same package)
-	// We need to track the number of global variables defined for the VM.
-	numGlobals int
+	// Removed numGlobals field - the count is now in c.globals.numDefinitions
 
 	// Scope management
 	symbolTableStack []*SymbolTable // Referring to SymbolTable (defined in symboltable.go, same package)
@@ -65,11 +37,11 @@ func New() *Compiler {
 	programBytecode := NewBytecode() // Referring to NewBytecode (defined in code.go, same package)
 
 	c := &Compiler{
-		instructions:     programBytecode.Instructions, // Start with the program's instruction slice ([]byte)
-		constants:        programBytecode.Constants,    // Start with the program's constant slice ([]types.Value)
-		globals:          globalTable,                  // The global table
-		numGlobals:       0,                            // Start with 0 globals
-		symbolTableStack: []*SymbolTable{globalTable},  // Start with global scope on stack
+		instructions: programBytecode.Instructions, // Start with the program's instruction slice ([]byte)
+		constants:    programBytecode.Constants,    // Start with the program's constant slice ([]types.Value)
+		globals:      globalTable,                  // The global table
+		// numGlobals field removed
+		symbolTableStack: []*SymbolTable{globalTable}, // Start with global scope on stack
 		currentScope:     globalTable,
 		currentBytecode:  programBytecode, // Compiling the main program initially
 	}
@@ -83,8 +55,9 @@ func New() *Compiler {
 }
 
 // NumGlobalVariables returns the total number of global variables defined.
+// This now returns the number of definitions in the global symbol table.
 func (c *Compiler) NumGlobalVariables() int {
-	return c.numGlobals
+	return c.globals.numDefinitions // Use the count from the global symbol table
 }
 
 // newFunctionCompiler creates a compiler instance for a function body.
@@ -99,12 +72,12 @@ func (c *Compiler) newFunctionCompiler() *Compiler {
 	funcBytecode := NewBytecode() // Referring to NewBytecode (defined in code.go, same package)
 
 	// Create a new compiler instance for this function's body.
-	// It shares the global symbol table but has its own instruction/constant buffers.
+	// It shares the global symbol table and uses its numDefinitions for global count.
 	funcComp := &Compiler{
-		instructions:     funcBytecode.Instructions, // Start with the function's instruction slice ([]byte)
-		constants:        funcBytecode.Constants,    // Start with the function's constant slice ([]types.Value)
-		globals:          c.globals,                 // Share the global table
-		numGlobals:       c.numGlobals,              // Inherit global count (will be updated in parent)
+		instructions: funcBytecode.Instructions, // Start with the function's instruction slice ([]byte)
+		constants:    funcBytecode.Constants,    // Start with the function's constant slice ([]types.Value)
+		globals:      c.globals,                 // Share the global table
+		// numGlobals field removed
 		symbolTableStack: []*SymbolTable{funcScope}, // Stack starts with function scope
 		currentScope:     funcScope,
 		currentBytecode:  funcBytecode, // Compiling this function's body
@@ -133,7 +106,7 @@ func (c *Compiler) EnterScope(isFunctionScope bool) {
 	c.currentScope = newTable
 	// Initialize the number of local variables for the new scope.
 	// This count will be incremented by DefineLocal.
-	c.currentScope.numDefinitions = 0 // Start local count for this scope at 0
+	// c.currentScope.numDefinitions is already initialized to 0 by NewEnclosedSymbolTable
 }
 
 // LeaveScope pops the current scope from the stack.
@@ -164,6 +137,7 @@ func (c *Compiler) LeaveScope() {
 
 // DefineGlobal defines a symbol in the top-level global symbol table.
 // Returns the created Symbol.
+// This now increments the global symbol table's definition count.
 func (c *Compiler) DefineGlobal(name string, kind SymbolKind) *Symbol { // Referring to SymbolKind, Symbol (defined in symboltable.go, same package)
 	// Check if it already exists in the global table
 	symbol, ok := c.globals.store[name]
@@ -174,9 +148,10 @@ func (c *Compiler) DefineGlobal(name string, kind SymbolKind) *Symbol { // Refer
 	}
 
 	// Define a new global symbol
-	symbol = &Symbol{Name: name, Kind: kind, Index: c.numGlobals} // Referring to Symbol (defined in symboltable.go, same package)
+	// The index is the current number of definitions in the global table.
+	symbol = &Symbol{Name: name, Kind: kind, Index: c.globals.numDefinitions} // Referring to Symbol (defined in symboltable.go, same package)
 	c.globals.store[name] = symbol
-	c.numGlobals++ // Increment the global count
+	c.globals.numDefinitions++ // Manually increment here since we are not using the SymbolTable.Define method directly for globals in this helper
 	return symbol
 }
 
@@ -198,7 +173,7 @@ func (c *Compiler) DefineLocal(name string) *Symbol { // Referring to Symbol (de
 	// The index is the current number of definitions in this scope.
 	symbol := &Symbol{Name: name, Kind: Local, Index: c.currentScope.numDefinitions} // Referring to Symbol, Local (defined in symboltable.go, same package)
 	c.currentScope.store[name] = symbol
-	c.currentScope.numDefinitions++ // Increment the local count for this scope
+	c.currentScope.numDefinitions++ // Manually increment here since we are not using the SymbolTable.Define method directly for locals in this helper
 	return symbol
 }
 
@@ -234,9 +209,8 @@ func (c *Compiler) Compile(program *ast.Program) (*Bytecode, error) { // Returni
 	c.currentBytecode.NumLocals = 0
 	c.currentBytecode.NumParameters = 0 // Program has no parameters
 
-	// The number of global variables is stored in c.numGlobals.
-	// This needs to be accessible by the VM. Let's add it to the Bytecode struct.
-	c.currentBytecode.NumGlobals = c.numGlobals // Add this field to Bytecode struct
+	// The number of global variables is the number of definitions in the global symbol table.
+	c.currentBytecode.NumGlobals = c.globals.numDefinitions // Use the count from the global symbol table
 
 	return c.currentBytecode, nil
 }
@@ -269,9 +243,14 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 				// If we are in the global scope, define it as a Global.
 				// If we are in a nested scope (block or function), define it as a Local.
 				if c.currentScope.Outer == nil { // Check if it's the global scope
-					symbol = c.DefineGlobal(target.Name, Global) // Define as Global (defined in symboltable.go, same package)
+					// Define as Global in the main compiler's global table.
+					// This ensures the global count is updated correctly.
+					// Corrected call to Define: provide the SymbolKind.
+					symbol = c.globals.Define(target.Name, Global) // Pass name and Global kind
 				} else {
-					symbol = c.DefineLocal(target.Name) // Define as Local in current scope (defined in symboltable.go, same package)
+					// Define as Local in the current scope.
+					// Corrected call to Define: provide the SymbolKind.
+					symbol = c.currentScope.Define(target.Name, Local) // Pass name and Local kind
 				}
 			}
 
@@ -282,6 +261,7 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 				c.emit(OpSetGlobal, symbol.Index) // Use OpSetGlobal
 			case Local, Parameter: // Parameters are also accessed as locals within the function frame (defined in symboltable.go, same package)
 				// Assign to a local variable or parameter. Operand is the local/parameter index within the frame.
+				// The operand for locals is 1 byte (uint8).
 				c.emit(OpSetLocal, symbol.Index) // Use OpSetLocal
 			case Builtin: // Referring to Builtin (defined in symboltable.go, same package)
 				// Cannot assign to a builtin.
@@ -362,7 +342,8 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		// Assuming ast.FuncDefStmt has a field like `Params []string`
 		for _, paramName := range stmt.Params {
 			// DefineLocal returns the symbol, we don't need it here, just need to register the parameter.
-			funcCompiler.DefineLocal(paramName)
+			// Corrected call to Define: provide the SymbolKind (Parameter).
+			funcCompiler.DefineLocal(paramName) // DefineLocal internally calls Define with Local kind
 		}
 
 		// Compile the function body.
@@ -388,6 +369,7 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		funcBytecode.Constants = funcCompiler.constants
 		funcBytecode.NumLocals = funcCompiler.currentScope.numDefinitions // Number of parameters + locals
 		funcBytecode.NumParameters = len(stmt.Params)                     // Store the number of parameters
+		// NumGlobals is 0 for function bytecode
 
 		// Create the Function value object.
 		// This object represents the compiled function at runtime. Now in types package.
@@ -468,6 +450,7 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 			c.emit(OpGetGlobal, symbol.Index) // Use OpGetGlobal
 		case Local, Parameter: // Parameters are also accessed as locals within the function frame (defined in symboltable.go, same package)
 			// Get value of a local variable or parameter. Operand is the local/parameter index.
+			// The operand for locals is 1 byte (uint8).
 			c.emit(OpGetLocal, symbol.Index) // Use OpGetLocal
 		case Builtin: // Referring to Builtin (defined in symboltable.go, same package)
 			// Getting a builtin usually means pushing the builtin function object onto the stack.
@@ -813,6 +796,7 @@ func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
 	c.EnterScope(false) // false indicates it's not a function scope
 
 	// Define the loop variable in the current scope.
+	// DefineLocal internally calls Define with Local kind.
 	iterVarSymbol := c.DefineLocal(stmt.Variable)
 
 	// Mark the position for the loop's jump back (to get the next item).
@@ -825,6 +809,7 @@ func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
 	jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999) // Use OpJumpNotTruthy
 
 	// The next value is now on top of the stack. Assign it to the loop variable.
+	// The operand for locals is 1 byte (uint8).
 	c.emit(OpSetLocal, iterVarSymbol.Index) // Use OpSetLocal
 
 	// Compile the loop body.

@@ -8,12 +8,15 @@ import (
 	"os"
 	"strings"
 
+	// Import the compiler package to access its types (Opcode, Instructions, Bytecode)
 	"github.com/SethGK/Inscript/internal/compiler"
+	// Import the new types package
 	"github.com/SethGK/Inscript/internal/types"
+	// No import needed for value.go as its content is moved to types/value.go
 )
 
 const StackSize = 2048
-const GlobalsSize = 65536
+const GlobalsSize = 65536 // This constant is not strictly needed if sizing vm.globals dynamically
 const MaxFrames = 1024
 
 // VM represents the Inscript Virtual Machine.
@@ -30,6 +33,51 @@ type VM struct {
 
 	// Output writer for print statements
 	outputWriter io.Writer
+}
+
+// Frame represents a single call frame for function execution.
+type Frame struct {
+	closure     *types.Closure // The closure being executed
+	ip          int            // Instruction pointer: points to the next instruction to execute
+	basePointer int            // Base pointer: points to the first slot in the stack used by this frame (for locals and arguments)
+	locals      []types.Value  // Local variables and parameters for this frame
+}
+
+// NewFrame creates a new call frame.
+// basePointer is the stack index where this frame's locals and arguments begin.
+func NewFrame(closure *types.Closure, basePointer int) *Frame {
+	// The number of locals needed for a frame is the number of parameters + declared local variables.
+	// This is stored in the CompiledFunction.NumLocals.
+	locals := make([]types.Value, closure.Fn.NumLocals)
+
+	// Copy arguments from the stack into the beginning of the locals slice.
+	// Arguments are on the stack right before the function object, starting at basePointer + 1.
+	// The number of arguments is closure.Fn.NumParameters.
+	for i := 0; i < closure.Fn.NumParameters; i++ {
+		// Arguments are at stack[basePointer + 1 + i]
+		// Locals for this frame start at locals[i]
+		// Note: This assumes arguments are pushed onto the stack immediately before the function object.
+		// The compiler's OpCall logic should ensure this.
+		// The basePointer points to the function object itself. The arguments are after it.
+		// The arguments are at stack[basePointer + 1] to stack[basePointer + NumParameters].
+		// The locals array for the new frame starts at index 0.
+		// So, locals[i] should get the value from stack[basePointer + 1 + i].
+		// This needs to be handled by the VM when pushing the frame.
+		// The NewFrame function itself just creates the frame structure.
+		// The VM's OpCall instruction is responsible for copying arguments into the new frame's locals.
+	}
+
+	return &Frame{
+		closure:     closure,
+		ip:          -1, // Start at -1 so the first instruction is at index 0 after increment
+		basePointer: basePointer,
+		locals:      locals, // Allocate space for locals and parameters
+	}
+}
+
+// Instructions returns the instructions of the compiled function in this frame.
+func (f *Frame) Instructions() compiler.Instructions {
+	return f.closure.Fn.Instructions
 }
 
 // New creates a new VM instance.
@@ -51,7 +99,7 @@ func New(bytecode *compiler.Bytecode) *VM { // Takes *compiler.Bytecode
 		constants:    bytecode.Constants,                       // This should now work if Bytecode.Constants is []types.Value
 		stack:        make([]types.Value, StackSize),           // Referring to Value from types package
 		sp:           0,                                        // Stack starts empty, sp is the next available slot
-		globals:      make([]types.Value, bytecode.NumGlobals), // Allocate space for globals based on compiler count - Referring to Value from types package
+		globals:      make([]types.Value, bytecode.NumGlobals), // Allocate space for globals based on compiler count - This now uses the corrected NumGlobals from the compiler
 		frames:       frames,
 		framesIndex:  1,         // Start with the main frame at index 0, next frame will be at index 1
 		outputWriter: os.Stdout, // Default output to stdout
@@ -150,7 +198,7 @@ func (vm *VM) Run() error {
 			// Operand is the index of the constant in the constant pool.
 			constantIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
 			vm.push(vm.constants[constantIndex])
-			currentFrame.ip += 2 // Operand (2)
+			currentFrame.ip += 2 // Operand (2 bytes for uint16)
 
 		case compiler.OpAdd: // Using compiler.OpAdd (from compiler package)
 			right := vm.pop()
@@ -267,29 +315,43 @@ func (vm *VM) Run() error {
 		case compiler.OpSetGlobal: // Using compiler.OpSetGlobal (from compiler package)
 			globalIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
 			vm.globals[globalIndex] = vm.pop()
-			currentFrame.ip += 2 // Operand (2)
+			currentFrame.ip += 2 // Operand (2 bytes for uint16)
 
 		case compiler.OpGetGlobal: // Using compiler.OpGetGlobal (from compiler package)
 			globalIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			vm.push(vm.globals[globalIndex])
-			currentFrame.ip += 2 // Operand (2)
+			// Check if the global index is within the bounds of the globals slice
+			if int(globalIndex) >= len(vm.globals) {
+				return fmt.Errorf("runtime error: global variable index out of bounds: %d (max %d)", globalIndex, len(vm.globals)-1)
+			}
+			vm.push(vm.globals[globalIndex]) // This was the line causing the panic
+			currentFrame.ip += 2             // Operand (2 bytes for uint16)
 
 		case compiler.OpSetLocal: // Using compiler.OpSetLocal (from compiler package)
-			localIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
+			// Operand for local index is 1 byte (uint8)
+			localIndex := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
+			currentFrame.ip += 1                                  // Operand (1 byte for uint8)
 			// Locals are stored in the current frame's locals array.
 			// The operand is the index within that array.
+			// Check if the local index is within the bounds of the frame's locals slice
+			if int(localIndex) >= len(currentFrame.locals) {
+				return fmt.Errorf("runtime error: local variable index out of bounds: %d (max %d)", localIndex, len(currentFrame.locals)-1)
+			}
 			currentFrame.locals[localIndex] = vm.pop()
-			currentFrame.ip += 2 // Operand (2)
 
 		case compiler.OpGetLocal: // Using compiler.OpGetLocal (from compiler package)
-			localIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
+			// Operand for local index is 1 byte (uint8)
+			localIndex := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
+			currentFrame.ip += 1                                  // Operand (1 byte for uint8)
 			// Get the local variable from the current frame's locals array.
+			// Check if the local index is within the bounds of the frame's locals slice
+			if int(localIndex) >= len(currentFrame.locals) {
+				return fmt.Errorf("runtime error: local variable index out of bounds: %d (max %d)", localIndex, len(currentFrame.locals)-1)
+			}
 			vm.push(currentFrame.locals[localIndex])
-			currentFrame.ip += 2 // Operand (2)
 
 		case compiler.OpArray: // Using compiler.OpArray (from compiler package)
 			numElements := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                                    // Operand (2)
+			currentFrame.ip += 2                                    // Operand (2 bytes for uint16)
 			// Elements are on the stack, pop them in reverse order to build the list
 			elements := make([]types.Value, numElements) // Referring to Value from types package
 			for i := int(numElements) - 1; i >= 0; i-- {
@@ -299,7 +361,7 @@ func (vm *VM) Run() error {
 
 		case compiler.OpHash: // Using compiler.OpHash (from compiler package)
 			numPairs := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                                 // Operand (2)
+			currentFrame.ip += 2                                 // Operand (2 bytes for uint16)
 			// Key-value pairs are on the stack: key1, value1, key2, value2, ...
 			// Pop them in reverse order: valueN, keyN, ..., value1, key1
 			fields := make(map[string]types.Value) // Referring to Value from types package
@@ -351,7 +413,7 @@ func (vm *VM) Run() error {
 
 		case compiler.OpJumpNotTruthy: // Using compiler.OpJumpNotTruthy (from compiler package)
 			pos := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                            // Move past the operand
+			currentFrame.ip += 2                            // Move past the operand (2 bytes)
 			condition := vm.pop()
 			if !isTruthy(condition) { // isTruthy is defined below in vm package
 				currentFrame.ip = int(pos) - 1 // Set ip to target - 1
@@ -360,7 +422,7 @@ func (vm *VM) Run() error {
 
 		case compiler.OpJumpTruthy: // Using compiler.OpJumpTruthy (from compiler package)
 			pos := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                            // Move past the operand
+			currentFrame.ip += 2                            // Move past the operand (2 bytes)
 			condition := vm.pop()
 			if isTruthy(condition) { // isTruthy is defined below in vm package
 				currentFrame.ip = int(pos) - 1 // Set ip to target - 1
@@ -368,8 +430,9 @@ func (vm *VM) Run() error {
 			// ip will be incremented by the loop in the next iteration
 
 		case compiler.OpPrint: // Using compiler.OpPrint (from compiler package)
+			// Operand for print arguments count is 1 byte (uint8)
 			numArgs := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
-			currentFrame.ip += 1                               // Operand (1)
+			currentFrame.ip += 1                               // Operand (1 byte for uint8)
 
 			// Arguments are on the stack in reverse order of compilation.
 			// Pop them and print.
@@ -381,8 +444,9 @@ func (vm *VM) Run() error {
 			fmt.Fprintln(vm.outputWriter, strings.Join(args, " "))
 
 		case compiler.OpCall: // Using compiler.OpCall (from compiler package)
+			// Operand for call arguments count is 1 byte (uint8)
 			numArgs := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
-			currentFrame.ip += 1                               // Operand (1)
+			currentFrame.ip += 1                               // Operand (1 byte for uint8)
 
 			// The function object is below the arguments on the stack.
 			// Stack: [..., function, arg1, arg2, ..., argN]
@@ -409,8 +473,15 @@ func (vm *VM) Run() error {
 
 			// Create a new call frame for the function.
 			// The arguments are already on the stack in the correct position relative to the new frame's base pointer.
-			// The NewFrame function will copy the arguments into the frame's locals array.
+			// The NewFrame function will copy the arguments into the new frame's locals array.
 			newFrame := NewFrame(closure, basePointer) // NewFrame is defined in vm package
+
+			// Copy arguments from the stack into the new frame's locals.
+			// Arguments are located on the stack starting at basePointer + 1.
+			// The new frame's locals array starts at index 0.
+			for i := 0; i < fn.NumParameters; i++ {
+				newFrame.locals[i] = vm.stack[basePointer+1+i]
+			}
 
 			// Push the new frame onto the frame stack.
 			vm.pushFrame(newFrame)
@@ -659,11 +730,8 @@ func (vm *VM) divide(left, right types.Value) types.Value { // Referring to Valu
 	rightInt, isRightInt := right.(*types.Integer)   // Referring to Integer from types package
 	rightFloat, isRightFloat := right.(*types.Float) // Referring to Float from types package
 
-	if isRightInt && rightInt.Value == 0 {
-		fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
-	}
-	if isRightFloat && rightFloat.Value == 0.0 {
+	// Handle division by zero
+	if (isRightInt && rightInt.Value == 0) || (isRightFloat && rightFloat.Value == 0.0) {
 		fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
@@ -700,6 +768,7 @@ func (vm *VM) modulo(left, right types.Value) types.Value { // Referring to Valu
 	rightInt, isRightInt := right.(*types.Integer) // Referring to Integer from types package
 
 	if isLeftInt && isRightInt {
+		// Handle modulo by zero
 		if rightInt.Value == 0 {
 			fmt.Fprintf(os.Stderr, "runtime error: modulo by zero\n")
 			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
@@ -712,7 +781,7 @@ func (vm *VM) modulo(left, right types.Value) types.Value { // Referring to Valu
 	return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 }
 
-// power performs exponentiation on two values.
+// power performs the power operation (left^right) on two values.
 func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values
 	if left == nil || right == nil {
@@ -727,8 +796,8 @@ func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value
 	rightFloat, isRightFloat := right.(*types.Float) // Referring to Float from types package
 
 	if isLeftInt && isRightInt {
-		// Integer power (requires math.Pow and casting)
-		return &types.Float{Value: math.Pow(float64(leftInt.Value), float64(rightInt.Value))} // Referring to Float from types package
+		// Integer power
+		return &types.Integer{Value: int64(math.Pow(float64(leftInt.Value), float64(rightInt.Value)))} // Referring to Integer from types package
 	}
 	if isLeftFloat && isRightFloat {
 		return &types.Float{Value: math.Pow(leftFloat.Value, rightFloat.Value)} // Referring to Float from types package
@@ -745,7 +814,7 @@ func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value
 	return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 }
 
-// negate performs negation on a value.
+// negate performs numerical negation on a value.
 func (vm *VM) negate(operand types.Value) types.Value { // Referring to Value from types package
 	// Check for nil value
 	if operand == nil {
@@ -753,7 +822,7 @@ func (vm *VM) negate(operand types.Value) types.Value { // Referring to Value fr
 		return &types.Nil{} // Referring to Nil from types package
 	}
 
-	// Negation is typically defined for numbers.
+	// Negation is typically only defined for numbers.
 	switch operand := operand.(type) {
 	case *types.Integer: // Referring to Integer from types package
 		return &types.Integer{Value: -operand.Value} // Referring to Integer from types package
@@ -761,188 +830,146 @@ func (vm *VM) negate(operand types.Value) types.Value { // Referring to Value fr
 		return &types.Float{Value: -operand.Value} // Referring to Float from types package
 	default:
 		// Unsupported type for negation
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for negation: -%s\n", operand.Type())
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for negation: %s\n", operand.Type())
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
 }
 
-// logicalNot performs logical NOT on a value based on its truthiness.
+// logicalNot performs logical NOT on a value.
 func (vm *VM) logicalNot(operand types.Value) types.Value { // Referring to Value from types package
-	// The result is the boolean negation of the operand's truthiness.
+	// Check for nil value
+	if operand == nil {
+		// 'not nil' is typically true
+		return &types.Boolean{Value: true} // Referring to Boolean from types package
+	}
+
+	// Logical NOT is typically defined for booleans.
+	// For other types, we can define truthiness rules (e.g., numbers other than 0 are true, non-empty strings/lists/tables are true).
+	// Based on your compiler's OpJumpNotTruthy logic, it seems you have a concept of truthiness.
+	// Let's use the isTruthy helper here.
 	return &types.Boolean{Value: !isTruthy(operand)} // Referring to Boolean from types package
 }
 
-// Comparison helper functions
-
 // equal checks for equality between two values.
 func (vm *VM) equal(left, right types.Value) types.Value { // Referring to Value from types package
-	// Handle nil equality
+	// Use the Equals method defined on the Value interface.
+	// Handle nil comparisons explicitly.
 	if left == nil && right == nil {
 		return &types.Boolean{Value: true} // Referring to Boolean from types package
 	}
 	if left == nil || right == nil {
 		return &types.Boolean{Value: false} // Referring to Boolean from types package
 	}
-
-	// Use the Equals method defined on Value interface
 	return &types.Boolean{Value: left.Equals(right)} // Referring to Boolean from types package
 }
 
 // notEqual checks for inequality between two values.
 func (vm *VM) notEqual(left, right types.Value) types.Value { // Referring to Value from types package
-	// Inequality is the logical NOT of equality.
-	// Ensure the result of equal is a Boolean before accessing Value
-	eqResult := vm.equal(left, right)
-	eqBoolean, ok := eqResult.(*types.Boolean)
-	if !ok {
-		// This should not happen if equal returns a Boolean, but as a safeguard:
-		fmt.Fprintf(os.Stderr, "runtime error: internal error: equal did not return a boolean\n")
-		return &types.Nil{} // Or a specific error value
+	// Use the Equals method and negate the result.
+	if left == nil && right == nil {
+		return &types.Boolean{Value: false} // Referring to Boolean from types package
 	}
-	return &types.Boolean{Value: !eqBoolean.Value} // Referring to Boolean from types package
+	if left == nil || right == nil {
+		return &types.Boolean{Value: true} // Referring to Boolean from types package
+	}
+	return &types.Boolean{Value: !left.Equals(right)} // Referring to Boolean from types package
 }
 
 // greaterThan checks if left is greater than right.
 func (vm *VM) greaterThan(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+	// Use the Compare method defined on the Value interface.
+	// Handle nil comparisons.
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-
-	// Use the Compare method defined on Value interface
-	// Assuming Compare returns > 0 if left > right, < 0 if left < right, 0 if equal
-	cmpResult, err := left.Compare(right)
+	comparison, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: comparison error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-	return &types.Boolean{Value: cmpResult > 0} // Referring to Boolean from types package
+	return &types.Boolean{Value: comparison > 0} // Referring to Boolean from types package
 }
 
 // lessThan checks if left is less than right.
 func (vm *VM) lessThan(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+	// Use the Compare method defined on the Value interface.
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-
-	cmpResult, err := left.Compare(right)
+	comparison, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: comparison error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-	return &types.Boolean{Value: cmpResult < 0} // Referring to Boolean from types package
+	return &types.Boolean{Value: comparison < 0} // Referring to Boolean from types package
 }
 
 // greaterEqual checks if left is greater than or equal to right.
 func (vm *VM) greaterEqual(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+	// Use the Compare method defined on the Value interface.
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-
-	cmpResult, err := left.Compare(right)
+	comparison, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: comparison error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-	return &types.Boolean{Value: cmpResult >= 0} // Referring to Boolean from types package
+	return &types.Boolean{Value: comparison >= 0} // Referring to Boolean from types package
 }
 
 // lessEqual checks if left is less than or equal to right.
 func (vm *VM) lessEqual(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+	// Use the Compare method defined on the Value interface.
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-
-	cmpResult, err := left.Compare(right)
+	comparison, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: comparison error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
-	return &types.Boolean{Value: cmpResult <= 0} // Referring to Boolean from types package
+	return &types.Boolean{Value: comparison <= 0} // Referring to Boolean from types package
 }
 
 // isTruthy determines the truthiness of a value.
+// This is used for conditional jumps (OpJumpNotTruthy, OpJumpTruthy).
 func isTruthy(obj types.Value) bool { // Referring to Value from types package
-	// Define truthiness rules for your language.
-	// Common rules: nil is false, boolean false is false, numbers other than 0 are true,
-	// strings other than empty string are true, lists/tables other than empty are true.
+	if obj == nil {
+		return false // nil is falsy
+	}
 	switch obj := obj.(type) {
 	case *types.Boolean: // Referring to Boolean from types package
-		return obj.Value
+		return obj.Value // Boolean value itself
 	case *types.Nil: // Referring to Nil from types package
-		return false
+		return false // Nil is falsy
 	case *types.Integer: // Referring to Integer from types package
-		return obj.Value != 0
+		return obj.Value != 0 // Integers are truthy if non-zero
 	case *types.Float: // Referring to Float from types package
-		return obj.Value != 0.0
+		return obj.Value != 0.0 // Floats are truthy if non-zero
 	case *types.String: // Referring to String from types package
-		return obj.Value != ""
+		return len(obj.Value) > 0 // Strings are truthy if non-empty
 	case *types.List: // Referring to List from types package
-		return len(obj.Elements) > 0
+		return len(obj.Elements) > 0 // Lists are truthy if non-empty
 	case *types.Table: // Referring to Table from types package
-		return len(obj.Fields) > 0
-	default:
-		// By default, most other values are considered truthy.
+		return len(obj.Fields) > 0 // Tables are truthy if non-empty
+	case *types.CompiledFunction: // Referring to CompiledFunction from types package
+		return true // Functions are truthy
+	case *types.Closure: // Referring to Closure from types package
+		return true // Closures are truthy
+	case types.Iterator: // Referring to Iterator from types package
+		// Iterators are typically truthy as long as they haven't finished iteration.
+		// This might require a method on the Iterator interface to check if it's done.
+		// For now, let's assume iterators are always truthy if they exist.
 		return true
+	case *types.Error: // Referring to Error from types package
+		return false // Errors are typically falsy
+	default:
+		// Default to falsy for unknown types, or error depending on language design.
+		return false
 	}
 }
-
-// Frame represents a call frame for function execution.
-// Defined in the vm package.
-type Frame struct {
-	cl          *types.Closure // The closure being executed - Referring to Closure from types package
-	ip          int            // Instruction pointer within the function's instructions
-	basePointer int            // Stack pointer value when this frame was created (start of locals/args)
-	locals      []types.Value  // Local variables and parameters for this frame - Referring to Value from types package
-}
-
-// NewFrame creates a new call frame.
-// basePointer is the stack pointer value when this frame was created.
-// The frame's locals array will hold arguments followed by local variables.
-// Defined in the vm package.
-func NewFrame(cl *types.Closure, basePointer int) *Frame { // Referring to Closure from types package
-	// The locals array needs space for parameters + local variables.
-	// The compiler determines NumLocals (params + locals).
-	locals := make([]types.Value, cl.Fn.NumLocals) // Referring to Value from types package
-
-	// Arguments are located on the stack just before the function object.
-	// The basePointer points to the position *before* the function object and arguments.
-	// The arguments start at stack[basePointer + 1] up to stack[basePointer + NumParameters].
-	// We need to copy these arguments into the start of the locals array (locals[0] to locals[NumParameters-1]).
-	// The number of arguments is cl.Fn.NumParameters.
-	// The VM's OpCall instruction handles the copying of arguments into the new frame's local storage.
-	// The basePointer is used by the VM to calculate where the arguments are on the stack.
-
-	return &Frame{
-		cl:          cl,
-		ip:          -1,          // Start before the first instruction so increment moves to 0
-		basePointer: basePointer, // Keep track of the base pointer for stack management
-		locals:      locals,
-	}
-}
-
-// Instructions returns the instructions for the compiled function in this frame.
-func (f *Frame) Instructions() compiler.Instructions { // Returning compiler.Instructions (from compiler package)
-	return f.cl.Fn.Instructions // Instructions field is []byte in types.CompiledFunction
-}
-
-// BasePointer returns the base pointer for this frame.
-// This is the stack pointer value when the frame was created.
-func (f *Frame) BasePointer() int {
-	return f.basePointer
-}
-
-// SetLocals sets the locals slice for the frame. This is used by the VM's OpCall
-// to pass arguments into the new frame's local storage.
-// This method might not be strictly necessary if locals are managed directly by the VM
-// based on basePointer and NumLocals, but can be useful for clarity or future features.
-// func (f *Frame) SetLocals(locals []types.Value) { // Takes []Value from types package
-// 	f.locals = locals
-// }
