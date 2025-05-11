@@ -1,123 +1,188 @@
 package compiler
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
-	// You might need to import your runtime value types here later
-	// "your_module_path/internal/vm/value"
 )
 
-// Instruction represents a single bytecode instruction.
-// In a real high-performance VM, this would likely be just a sequence of bytes
-// for efficiency. For development and debugging, a struct is easier to work with.
+// OpCode represents a single operation code.
+type OpCode byte
+
+// Define your opcodes here. Use iota to make them sequential.
+const (
+	OpConstant OpCode = iota // Push a constant onto the stack (operand: constant index)
+	OpAdd                    // Pop two, add, push result
+	OpSub                    // Pop two, subtract, push result
+	OpMul                    // Pop two, multiply, push result
+	OpDiv                    // Pop two, divide, push result
+	OpMod                    // Pop two, modulo, push result
+	OpPow                    // Pop two (base, exp), power, push result
+	OpMinus                  // Pop one, negate, push result
+	OpNot                    // Pop one, logical NOT, push boolean
+
+	OpEqual        // Pop two, compare ==, push boolean
+	OpNotEqual     // Pop two, compare !=, push boolean
+	OpGreaterThan  // Pop two, compare >, push boolean
+	OpLessThan     // Pop two, compare <, push boolean
+	OpGreaterEqual // Pop two, compare >=, push boolean
+	OpLessEqual    // Pop two, compare <=, push boolean
+
+	OpJump          // Unconditional jump (operand: target instruction index)
+	OpJumpNotTruthy // Pop condition, jump if falsy (operand: target instruction index)
+	OpJumpTruthy    // Pop condition, jump if truthy (operand: target instruction index)
+
+	OpPop // Pop the top element from the stack
+
+	OpNull  // Push null onto the stack
+	OpTrue  // Push boolean true onto the stack
+	OpFalse // Push boolean false onto the stack
+
+	OpPrint // Pop N arguments (operand: N), print them
+
+	OpSetGlobal // Pop value, set global variable (operand: global index)
+	OpGetGlobal // Get global variable, push value (operand: global index)
+
+	OpSetLocal // Pop value, set local variable (operand: local index within frame)
+	OpGetLocal // Get local variable, push value (operand: local index within frame)
+
+	OpArray    // Create an array from stack elements (operand: number of elements)
+	OpHash     // Create a hash from stack key-value pairs (operand: number of pairs)
+	OpIndex    // Pop index, pop aggregate, get indexed value, push result
+	OpSetIndex // Pop value, pop index, pop aggregate, set indexed value
+
+	OpCall        // Pop function object and args, call function (operand: number of arguments)
+	OpReturnValue // Pop return value, return from function
+	OpReturn      // Return from function (implicitly returns null)
+
+	OpGetIterator  // Pop iterable, push iterator
+	OpIteratorNext // Pop iterator, get next value/done, push value, push boolean - true if successful
+)
+
+// Definition describes an opcode and its operand widths.
+type Definition struct {
+	Name          string
+	OperandWidths []int // Widths in bytes for each operand
+}
+
+// definitions maps OpCode to its Definition.
+var definitions = map[OpCode]*Definition{
+	OpConstant: {"OpConstant", []int{2}}, // Constant index (up to 65535)
+	OpAdd:      {"OpAdd", []int{}},
+	OpSub:      {"OpSub", []int{}},
+	OpMul:      {"OpMul", []int{}},
+	OpDiv:      {"OpDiv", []int{}},
+	OpMod:      {"OpMod", []int{}},
+	OpPow:      {"OpPow", []int{}},
+	OpMinus:    {"OpMinus", []int{}},
+	OpNot:      {"OpNot", []int{}},
+
+	OpEqual:        {"OpEqual", []int{}},
+	OpNotEqual:     {"OpNotEqual", []int{}},
+	OpGreaterThan:  {"OpGreaterThan", []int{}},
+	OpLessThan:     {"OpLessThan", []int{}},
+	OpGreaterEqual: {"OpGreaterEqual", []int{}},
+	OpLessEqual:    {"OpLessEqual", []int{}},
+
+	OpJump:          {"OpJump", []int{2}},          // Target instruction index (up to 65535)
+	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}}, // Target instruction index
+	OpJumpTruthy:    {"OpJumpTruthy", []int{2}},    // Target instruction index
+
+	OpPop: {"OpPop", []int{}},
+
+	OpNull:  {"OpNull", []int{}},
+	OpTrue:  {"OpTrue", []int{}},
+	OpFalse: {"OpFalse", []int{}},
+
+	OpPrint: {"OpPrint", []int{1}}, // Number of arguments (up to 255)
+
+	OpSetGlobal: {"OpSetGlobal", []int{2}}, // Global variable index (up to 65535)
+	OpGetGlobal: {"OpGetGlobal", []int{2}}, // Global variable index
+
+	OpSetLocal: {"OpSetLocal", []int{1}}, // Local variable index (up to 255 locals per frame)
+	OpGetLocal: {"OpGetLocal", []int{1}}, // Local variable index
+
+	OpArray:    {"OpArray", []int{2}}, // Number of elements (up to 65535)
+	OpHash:     {"OpHash", []int{2}},  // Number of key-value pairs
+	OpIndex:    {"OpIndex", []int{}},
+	OpSetIndex: {"OpSetIndex", []int{}},
+
+	OpCall:        {"OpCall", []int{1}}, // Number of arguments (up to 255)
+	OpReturnValue: {"OpReturnValue", []int{}},
+	OpReturn:      {"OpReturn", []int{}},
+
+	OpGetIterator:  {"OpGetIterator", []int{}},
+	OpIteratorNext: {"OpIteratorNext", []int{}},
+}
+
+// Lookup returns the Definition for a given OpCode.
+func Lookup(op OpCode) (*Definition, bool) {
+	def, ok := definitions[op]
+	return def, ok
+}
+
+// Instruction represents a single compiled instruction.
+// For simplicity, we store operands as int slice for now.
+// In a real VM, operands would be encoded directly in a byte slice.
 type Instruction struct {
-	Op       OpCode // The operation code
-	Operands []int  // Operands for the instruction (e.g., constant index, jump target, local index)
-	// The interpretation of Operands depends on the OpCode.
-	// In a production compiler, operands would be encoded into bytes based on their size (OperandWidths).
+	Op       OpCode
+	Operands []int
 }
 
-// Bytecode represents the compiled result of a compilation unit (program or function body).
-// It contains the sequence of instructions and the pool of constants used by those instructions.
+// Bytecode represents a compiled program or function body.
 type Bytecode struct {
-	Instructions  []Instruction // The sequence of bytecode instructions
-	Constants     []interface{} // The constant pool (literals, function objects, etc.)
-	NumLocals     int           // Number of local variables needed for this compilation unit (for function frames)
-	NumParameters int           // Number of parameters (for function frames) - only relevant for function bytecode
-	// NumGlobals int // Might be added here or managed by the VM based on global symbol table size
+	Instructions []Instruction // The sequence of instructions
+	Constants    []interface{} // The constant pool (using interface{} to store various Go types)
+
+	// Information for function calls and frames
+	NumLocals     int // Total number of local variables (including parameters) needed for a frame
+	NumParameters int // Number of parameters the function expects
+
+	// Total number of global variables defined in the program (only for the main program bytecode)
+	NumGlobals int
 }
 
-// NewBytecode creates a new, empty Bytecode struct.
+// NewBytecode creates an empty Bytecode object.
 func NewBytecode() *Bytecode {
 	return &Bytecode{
-		Instructions:  []Instruction{},
-		Constants:     []interface{}{},
-		NumLocals:     0, // Default to 0
-		NumParameters: 0, // Default to 0
+		Instructions:  make([]Instruction, 0),
+		Constants:     make([]interface{}, 0),
+		NumLocals:     0,
+		NumParameters: 0,
+		NumGlobals:    0,
 	}
 }
 
-// AddInstruction appends an instruction to the bytecode's instruction slice.
-// It returns the starting position (index) of the newly added instruction.
-// This position is useful for patching jumps later.
-func (b *Bytecode) AddInstruction(op OpCode, operands ...int) int {
-	instr := Instruction{Op: op, Operands: operands}
-	pos := len(b.Instructions)
-	b.Instructions = append(b.Instructions, instr)
-	return pos
-}
-
-// ReplaceInstructionAt patches an existing instruction at a given position.
-// This is primarily used by the compiler to fill in jump targets
-// after the target instruction's position is known.
-func (b *Bytecode) ReplaceInstructionAt(pos int, op OpCode, operands ...int) {
-	// Basic validation for the provided position.
-	if pos < 0 || pos >= len(b.Instructions) {
-		fmt.Printf("ERROR: Attempted to patch instruction at invalid position %d\n", pos)
-		// In a real compiler, this might be a fatal error or added to an error list.
-		return
-	}
-
-	// Optional: Basic check to ensure the new instruction's operand count
-	// matches the definition for the opcode. This helps catch compiler bugs.
-	def, ok := Lookup(op) // Lookup needs access to definitions from opcode.go
-	if !ok || len(operands) != len(def.OperandWidths) {
-		fmt.Printf("WARNING: Patching instruction %d with mismatched operands for opcode %v (Expected %d, Got %d)\n",
-			pos, op, len(def.OperandWidths), len(operands))
-		// Continue with the patch, but warn.
-	}
-
-	b.Instructions[pos] = Instruction{Op: op, Operands: operands}
-}
-
-// AddConstant adds a constant value to the constant pool.
-// Returns the index of the added constant.
-// TODO: Implement checking for duplicate constants to avoid adding the same value multiple times (optimization).
-func (b *Bytecode) AddConstant(obj interface{}) int {
-	b.Constants = append(b.Constants, obj)
-	return len(b.Constants) - 1 // Return the index of the newly added constant
-}
-
-// FormatInstructions converts the bytecode instructions into a human-readable string format.
-// This is invaluable for debugging the compiler and understanding the generated code.
+// FormatInstructions converts the Bytecode's instructions into a human-readable string.
+// This is now a method on the Bytecode struct.
 func (b *Bytecode) FormatInstructions() string {
-	var s strings.Builder // Use strings.Builder for efficient string concatenation
-	for i, instr := range b.Instructions {
-		// Format each instruction and append it to the string builder.
-		s.WriteString(fmt.Sprintf("%04d %s\n", i, formatInstruction(&instr))) // %04d formats the index with leading zeros
+	var out bytes.Buffer
+	i := 0
+	for i < len(b.Instructions) { // Use b.Instructions
+		instr := b.Instructions[i] // Use b.Instructions
+		def, ok := Lookup(instr.Op)
+		if !ok {
+			fmt.Fprintf(&out, "ERROR: unknown opcode %d at %d\n", instr.Op, i)
+			i++
+			continue
+		}
+
+		// Format operands
+		operands := ""
+		for j, operand := range instr.Operands {
+			if j > 0 {
+				operands += ", "
+			}
+			operands += fmt.Sprintf("%d", operand)
+		}
+
+		fmt.Fprintf(&out, "%04d %s %s\n", i, def.Name, operands)
+
+		// Move to the next instruction.
+		// The instruction length depends on the opcode and operand widths.
+		// For now, since Instruction struct stores operands directly,
+		// we just increment i by 1 per Instruction struct.
+		// If using a byte slice, you'd calculate the length here.
+		i++
 	}
-	return s.String()
+	return out.String()
 }
-
-// formatInstruction is a helper function to format a single instruction.
-// It uses the opcode definitions to print the instruction name and its operands.
-func formatInstruction(instr *Instruction) string {
-	// Look up the definition for the opcode to get its name and operand information.
-	def, ok := Lookup(instr.Op) // Lookup needs access to definitions from opcode.go
-	if !ok {
-		return fmt.Sprintf("ERROR: unknown opcode %d", instr.Op)
-	}
-
-	// Check if the number of provided operands matches the definition.
-	operandCount := len(def.OperandWidths)
-	if len(instr.Operands) != operandCount {
-		return fmt.Sprintf("ERROR: opcode %s has %d operands but received %d",
-			def.Name, operandCount, len(instr.Operands))
-	}
-
-	// Format the operands.
-	operandsStr := ""
-	if operandCount > 0 {
-		// For simplicity, we just print the integer values of the operands.
-		// A more advanced formatter might look up constant values from the pool
-		// or symbol names from the symbol table based on the opcode type.
-		operandsStr = fmt.Sprintf("%v", instr.Operands)
-		operandsStr = strings.Trim(operandsStr, "[]") // Remove the brackets from the slice printout
-	}
-
-	// Combine the opcode name and formatted operands.
-	return fmt.Sprintf("%s %s", def.Name, operandsStr)
-}
-
-// Note: If you implement operand encoding into []byte, you would add functions here
-// to read operands from a byte slice based on the opcode definition.
