@@ -1,88 +1,65 @@
-package compiler
+package compiler // Package compiler, as it's in the internal/compiler directory
 
-// SymbolKind represents whether a symbol is global, local, parameter, or builtin.
-type SymbolKind int
+// No imports needed for vm or types packages based on current structure
+
+// SymbolKind represents the kind of a symbol (global, local, parameter, builtin).
+type SymbolKind string
 
 const (
-	Global SymbolKind = iota
-	Local
-	Parameter
-	Builtin
+	Global    SymbolKind = "GLOBAL"
+	Local     SymbolKind = "LOCAL"
+	Parameter SymbolKind = "PARAMETER"
+	Builtin   SymbolKind = "BUILTIN"
 )
 
-// Symbol represents information about a variable, function, etc.
+// Symbol represents a compiled symbol (variable, function name, etc.).
 type Symbol struct {
 	Name  string
 	Kind  SymbolKind
-	Index int // Index in globals array, locals array, etc.
+	Index int // Index in the globals array or locals array
 }
 
-// SymbolTable maps symbol names to Symbols.
-// It supports nesting via the Outer field.
+// SymbolTable manages symbols in a scope.
 type SymbolTable struct {
-	store          map[string]*Symbol
-	numDefinitions int          // Number of symbols defined directly in this table (for locals/params)
-	Outer          *SymbolTable // Link to the parent scope's symbol table
+	Outer *SymbolTable // Outer scope for variable resolution
+
+	store map[string]*Symbol // Maps symbol names to Symbols
+
+	// For local scopes (functions/blocks), tracks the number of defined variables.
+	// This determines the size of the locals array needed for a frame.
+	numDefinitions int
 }
 
-// NewSymbolTable creates a new symbol table.
+// NewSymbolTable creates a new symbol table (for the global scope).
 func NewSymbolTable() *SymbolTable {
-	return &SymbolTable{store: make(map[string]*Symbol)}
+	return &SymbolTable{
+		store: make(map[string]*Symbol),
+	}
 }
 
-// NewEnclosedSymbolTable creates a new symbol table nested within an outer one.
+// NewEnclosedSymbolTable creates a new symbol table with an outer scope.
 func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 	s := NewSymbolTable()
 	s.Outer = outer
 	return s
 }
 
-// Define adds a new symbol to the table.
-// It returns the created Symbol.
-// This method is primarily used for defining Local and Parameter symbols.
-// Global symbols are typically defined directly in the top-level compiler's global table.
+// Define defines a new symbol in the current scope.
+// Returns the created Symbol.
 func (s *SymbolTable) Define(name string, kind SymbolKind) *Symbol {
-	if kind == Global {
-		// Global symbols should be defined in the top-level compiler's global table.
-		// This prevents accidental global definition in nested scopes.
-		panic("Define(Global) called on non-global symbol table")
-	}
-
 	symbol := &Symbol{Name: name, Kind: kind, Index: s.numDefinitions}
 	s.store[name] = symbol
-	s.numDefinitions++ // Increment definition count for this scope (locals/params)
+	s.numDefinitions++
 	return symbol
 }
 
-// Resolve finds a symbol in the table or its outer tables.
-// It searches from the current scope outwards to the global scope.
+// Resolve looks up a symbol in the current and outer scopes.
+// Returns the Symbol and true if found, nil and false otherwise.
 func (s *SymbolTable) Resolve(name string) (*Symbol, bool) {
-	// Check current scope
-	obj, ok := s.store[name]
-	if ok {
-		return obj, true
-	}
-
-	// If not found in current scope, try outer scopes recursively
-	if s.Outer != nil {
+	symbol, ok := s.store[name]
+	if !ok && s.Outer != nil {
+		// If not found in current scope, try outer scope.
 		return s.Outer.Resolve(name)
 	}
-
-	// Not found in any scope
-	return nil, false
-}
-
-// NumDefinitions returns the number of symbols defined directly in this table.
-// This is useful for determining the number of local variables/parameters in a function scope.
-func (s *SymbolTable) NumDefinitions() int {
-	return s.numDefinitions
-}
-
-// GlobalTable is a helper to get the top-most (global) symbol table.
-func (s *SymbolTable) GlobalTable() *SymbolTable {
-	current := s
-	for current.Outer != nil {
-		current = current.Outer
-	}
-	return current
+	return symbol, ok
 }

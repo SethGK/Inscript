@@ -1,8 +1,13 @@
-package compiler
+package compiler // Package compiler, as it's in the internal/compiler directory
 
 import (
 	"bytes"
+	"encoding/binary" // Needed for binary encoding/decoding
 	"fmt"
+
+	// Import the new types package to refer to types.Value
+	"github.com/SethGK/Inscript/internal/types"
+	// No import needed for vm package anymore
 )
 
 // OpCode represents a single operation code.
@@ -120,18 +125,71 @@ func Lookup(op OpCode) (*Definition, bool) {
 	return def, ok
 }
 
-// Instruction represents a single compiled instruction.
-// For simplicity, we store operands as int slice for now.
-// In a real VM, operands would be encoded directly in a byte slice.
-type Instruction struct {
-	Op       OpCode
-	Operands []int
+// Make creates an instruction byte slice from an opcode and operands.
+func Make(op OpCode, operands ...int) []byte {
+	def, ok := Lookup(op)
+	if !ok {
+		// TODO: Return an error or panic for unknown opcode
+		return []byte{} // Return empty slice for now
+	}
+
+	instructionLen := 1 // Opcode byte
+	for _, width := range def.OperandWidths {
+		instructionLen += width
+	}
+
+	instruction := make([]byte, instructionLen)
+	instruction[0] = byte(op)
+
+	offset := 1
+	for i, operand := range operands {
+		width := def.OperandWidths[i]
+		switch width {
+		case 1:
+			instruction[offset] = byte(operand)
+		case 2:
+			binary.BigEndian.PutUint16(instruction[offset:], uint16(operand))
+		}
+		offset += width
+	}
+
+	return instruction
+}
+
+// Instructions is a slice of instruction bytes.
+type Instructions []byte
+
+// ReadUint16 reads a 16-bit unsigned integer from an instruction slice.
+func ReadUint16(is Instructions) uint16 {
+	// Ensure the slice has at least 2 bytes
+	if len(is) < 2 {
+		// TODO: Handle error properly
+		return 0
+	}
+	return binary.BigEndian.Uint16(is)
+}
+
+// ReadUint8 reads an 8-bit unsigned integer from an instruction slice.
+func ReadUint8(is Instructions) uint8 {
+	// Ensure the slice has at least 1 byte
+	if len(is) < 1 {
+		// TODO: Handle error properly
+		return 0
+	}
+	return uint8(is[0])
+}
+
+// IntToBytes converts an integer to a 2-byte slice (big endian).
+func IntToBytes(i int) []byte {
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf, uint16(i))
+	return buf
 }
 
 // Bytecode represents a compiled program or function body.
 type Bytecode struct {
-	Instructions []Instruction // The sequence of instructions
-	Constants    []interface{} // The constant pool (using interface{} to store various Go types)
+	Instructions Instructions  // The sequence of instruction bytes
+	Constants    []types.Value // The constant pool (stores types.Value types) - Corrected type
 
 	// Information for function calls and frames
 	NumLocals     int // Total number of local variables (including parameters) needed for a frame
@@ -144,8 +202,8 @@ type Bytecode struct {
 // NewBytecode creates an empty Bytecode object.
 func NewBytecode() *Bytecode {
 	return &Bytecode{
-		Instructions:  make([]Instruction, 0),
-		Constants:     make([]interface{}, 0),
+		Instructions:  make([]byte, 0),        // Instructions is now []byte
+		Constants:     make([]types.Value, 0), // Constants is now []types.Value
 		NumLocals:     0,
 		NumParameters: 0,
 		NumGlobals:    0,
@@ -158,31 +216,62 @@ func (b *Bytecode) FormatInstructions() string {
 	var out bytes.Buffer
 	i := 0
 	for i < len(b.Instructions) { // Use b.Instructions
-		instr := b.Instructions[i] // Use b.Instructions
-		def, ok := Lookup(instr.Op)
+		instr := b.Instructions[i:] // Slice from current position
+		opcode := OpCode(instr[0])  // Get opcode from the byte slice
+
+		def, ok := Lookup(opcode)
 		if !ok {
-			fmt.Fprintf(&out, "ERROR: unknown opcode %d at %d\n", instr.Op, i)
+			fmt.Fprintf(&out, "ERROR: unknown opcode %d at %d\n", opcode, i)
 			i++
 			continue
 		}
 
-		// Format operands
+		// Read operands based on definition
 		operands := ""
-		for j, operand := range instr.Operands {
+		operandOffset := 1 // Start after the opcode byte
+		for j, width := range def.OperandWidths {
 			if j > 0 {
 				operands += ", "
 			}
-			operands += fmt.Sprintf("%d", operand)
+			// Ensure there are enough bytes for the operand
+			if operandOffset+width > len(instr) {
+				fmt.Fprintf(&out, "ERROR: not enough bytes for operand of %s at %d\n", def.Name, i)
+				// Attempt to print remaining bytes as hex for debugging
+				fmt.Fprintf(&out, " (remaining bytes: %x)\n", instr[operandOffset:])
+				i += len(instr) - i // Skip to end to avoid infinite loop
+				continue
+			}
+
+			switch width {
+			case 1:
+				operand := ReadUint8(instr[operandOffset:])
+				operands += fmt.Sprintf("%d", operand)
+			case 2:
+				operand := ReadUint16(instr[operandOffset:])
+				operands += fmt.Sprintf("%d", operand)
+			}
+			operandOffset += width
 		}
 
 		fmt.Fprintf(&out, "%04d %s %s\n", i, def.Name, operands)
 
 		// Move to the next instruction.
-		// The instruction length depends on the opcode and operand widths.
-		// For now, since Instruction struct stores operands directly,
-		// we just increment i by 1 per Instruction struct.
-		// If using a byte slice, you'd calculate the length here.
-		i++
+		// The instruction length is 1 (opcode) + total operand bytes
+		i += 1 + operandOffset - 1 // 1 (opcode) + total operand bytes
 	}
 	return out.String()
+}
+
+// GetLastOpcode returns the opcode of the last instruction in the byte slice.
+// This is a helper for the compiler's internal checks.
+// Note: This is a simplification and assumes the last instruction is valid.
+func GetLastOpcode(instrs Instructions) OpCode {
+	if len(instrs) == 0 {
+		return 0 // Return a zero value for Opcode
+	}
+	// This is a simplification. A proper implementation would parse the last instruction.
+	// For now, assuming the last byte is the opcode for simple cases like OpReturn/OpReturnValue.
+	// This is incorrect in general if opcodes have operands.
+	// TODO: Implement proper last instruction parsing from []byte if needed for more complex checks.
+	return OpCode(instrs[len(instrs)-1])
 }

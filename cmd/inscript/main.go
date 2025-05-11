@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/SethGK/Inscript/internal/ast"          // Import ST package
+	"github.com/SethGK/Inscript/internal/ast"          // Import AST package
 	"github.com/SethGK/Inscript/internal/compiler"     // Import Compiler package
 	"github.com/SethGK/Inscript/internal/vm"           // Import VM package
 	parser "github.com/SethGK/Inscript/parser/grammar" // Import the ANTLR generated parser package
@@ -82,20 +82,22 @@ func main() {
 	fmt.Println("----------------")
 
 	// 5. Execute
-	// Get the number of global variables from the compiler
-	numGlobals := comp.NumGlobalVariables()
-	vm := vm.New(bytecode, numGlobals) // Create a new VM instance
+	// Create a new VM instance, passing only the bytecode.
+	// The VM will get the number of globals from bytecode.NumGlobals.
+	vm := vm.New(bytecode)
 
-	// Run the bytecode
-	result, err := vm.Run()
+	// Run the bytecode. VM.Run now returns only an error.
+	err = vm.Run() // Corrected assignment
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Print the final result of the program if there was one
-	// Note: For simple scripts, the result might be nil or the value of the last expression.
-	fmt.Printf("Program finished. Result: %+v\n", result)
+	// The VM.Run method in the latest vm_go_updated immersive returns an error, not a value.
+	// If you want to capture the final result, you might need to modify VM.Run
+	// to return a value.Value as well, or inspect the stack after Run finishes.
+	// For now, we'll remove the result printing as VM.Run returns only error.
+	// fmt.Printf("Program finished. Result: %+v\n", result)
 
 	fmt.Println("Execution finished.")
 }
