@@ -1,9 +1,9 @@
+// internal/compiler/compiler.go
 package compiler
 
 import (
-	"fmt" // Needed for parsing integer literals
-	// Needed for string concatenation
-
+	"fmt"
+	// Needed for parsing integer literals
 	"github.com/SethGK/Inscript/internal/ast" // Use your actual module path
 	// You might need to import your runtime value types here later
 	// "github.com/SethGK/Inscript/internal/vm/value"
@@ -56,6 +56,11 @@ func New() *Compiler {
 	// c.DefineGlobal("print", Builtin) // Example
 
 	return c
+}
+
+// NumGlobalVariables returns the total number of global variables defined.
+func (c *Compiler) NumGlobalVariables() int {
+	return c.numGlobals
 }
 
 // newFunctionCompiler creates a compiler instance for a function body.
@@ -271,7 +276,8 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		return c.compileBlockStmt(stmt)
 
 	case *ast.IfStmt:
-		return c.compileIf(stmt) // Delegate to helper for if-elseif-else logic
+		// Delegate to helper for if-elseif-else logic
+		return c.compileIf(stmt)
 
 	case *ast.WhileStmt:
 		return c.compileWhile(stmt) // Delegate to helper for while loop logic
@@ -611,265 +617,133 @@ func (c *Compiler) compileIf(i *ast.IfStmt) error {
 
 // compileWhile handles while loops.
 func (c *Compiler) compileWhile(w *ast.WhileStmt) error {
-	// Mark the starting position of the loop condition check.
-	// Jumps from the body will return here.
-	loopStartPos := len(c.instructions)
-
-	// Compile the loop condition. Leaves a boolean on the stack.
-	if err := c.compileExpression(w.Cond); err != nil {
-		return err
-	}
-
-	// If the condition is false, jump out of the loop.
-	// Emit a placeholder jump and store its position.
-	jumpNotTruthy := c.emit(OpJumpNotTruthy, 0) // Placeholder target 0
-
-	// Compile the loop body.
-	// Use the compileBlockStmt method.
-	if err := c.compileBlockStmt(w.Body); err != nil {
-		return err
-	}
-
-	// After executing the body, unconditionally jump back to the start of the loop condition check.
-	c.emit(OpJump, loopStartPos)
-
-	// Patch the OpJumpNotTruthy instruction: its target is the instruction immediately after this jump back.
-	c.patchJump(jumpNotTruthy) // Patch to the instruction right after the OpJump to loopStartPos
-
-	return nil
+	// TODO: Implement while loop compilation.
+	// Similar to if, but the jump at the end of the body goes back to the condition.
+	return fmt.Errorf("While loop compilation not yet implemented")
 }
 
 // compileFor handles for loops (for IDENTIFIER 'in' expression block).
 // This requires support for iterables and iterators in the VM.
 func (c *Compiler) compileFor(f *ast.ForStmt) error {
 	// TODO: Implement for loop compilation.
-	// This is complex and depends on how you handle iterables and iterators in your VM.
-	// Typical approach:
-	// 1. Compile the Iterable expression (f.Iterable). It should result in an iterable object on the stack.
-	if err := c.compileExpression(f.Iterable); err != nil {
-		return err
-	}
-
-	// 2. Emit an instruction to get an iterator from the iterable (e.g., OpGetIterator). Leaves iterator on stack.
-	c.emit(OpGetIterator) // Requires OpGetIterator and VM support
-
-	// Mark the start of the loop body/check:
-	loopStartPos := len(c.instructions)
-
-	// 3. Emit an instruction to get the next value from the iterator (e.g., OpIteratorNext).
-	//    This instruction typically pushes the next value and a boolean (true if successful, false if done) onto the stack.
-	c.emit(OpIteratorNext) // Requires OpIteratorNext and VM support
-
-	// 4. Pop the boolean result of OpIteratorNext.
-	// 5. Emit OpJumpIfFalse to jump out of the loop if iteration is done. Patch target later.
-	//    The boolean is the top element after OpIteratorNext.
-	jumpEndPos := c.emit(OpJumpNotTruthy, 0) // Placeholder target 0
-	// The value is now below the boolean on the stack.
-
-	// 6. Pop the next value (the iterated element).
-	//    The VM's OpIteratorNext pushes value THEN boolean. So after OpJumpNotTruthy (which consumes boolean),
-	//    the value is at the top.
-	//    c.emit(OpPop) // Pop the value - actually, we need to use it!
-
-	// 7. Define the loop variable (`f.Variable`) in the current scope (it's a local variable).
-	//    // Loop variables are typically local to the loop body's scope.
-	//    // We need to enter a scope before compiling the body and define the variable there.
-	//    // This requires restructuring how the loop variable is handled relative to the block scope.
-	//    // A common pattern: the loop variable is defined *outside* the block scope, but its value is set inside.
-	//    // Let's assume for now the loop variable is defined in the scope *containing* the for loop.
-	//    // A better approach: the loop variable is local to the *implicit* scope of the loop body.
-	//    // Let's define it as a local within the scope entered for the block.
-
-	//    // Enter a new scope for the loop body (this scope contains the loop variable).
-	c.EnterScope(false) // Not a function scope
-
-	//    // Define the loop variable symbol in the *newly entered* scope.
-	loopVarSymbol := c.currentScope.Define(f.Variable, Local)
-	//    // The index is assigned by Define.
-
-	//    // 8. Emit OpSetLocal to store the current iterated value into the loop variable.
-	//    //    The iterated value is on top of the stack after OpIteratorNext and OpJumpNotTruthy.
-	c.emit(OpSetLocal, loopVarSymbol.Index) // Use the index assigned by Define
-
-	// 9. Compile the loop body (`f.Body`).
-	// Use the compileBlockStmt method.
-	if err := c.compileBlockStmt(f.Body); err != nil {
-		// Leave the scope on error
-		c.LeaveScope()
-		return err
-	}
-
-	//    // The result of the body is likely on the stack; pop it if it's an expression statement.
-	//    // The compileStatement for ExprStmt already emits OpPop, so this might not be needed here.
-
-	// 10. Emit OpJump back to the loop start check.
-	c.emit(OpJump, loopStartPos)
-
-	// 11. Leave the loop body scope.
-	c.LeaveScope()
-
-	// 12. Patch the exit jump.
-	c.patchJump(jumpEndPos) // Patch to the instruction right after the OpPop iterator
-
-	// 13. Clean up the iterator on the stack (e.g., emit OpPop after the loop).
-	c.emit(OpPop) // Pop the iterator object
-
-	return nil // For loop compilation implemented
+	return fmt.Errorf("For loop compilation not yet implemented")
 }
 
 // compileFuncDef handles function definitions (function(params) { body }).
 // This requires creating a separate compilation unit (Bytecode) for the function body.
 func (c *Compiler) compileFuncDef(f *ast.FuncDefStmt) error {
-	// 1. Create a new compiler instance for the function body.
-	// This new compiler is enclosed in the *current* scope of the parent compiler.
-	funcCompiler := c.newFunctionCompiler()
-
-	// 2. Enter the function's scope in the new compiler.
-	// This creates the symbol table for parameters and local variables.
-	funcCompiler.EnterScope(true) // Mark as function scope
-
-	// 3. Define parameters in the function's symbol table. Parameters are locals at the start of the frame.
-	// The index of a parameter corresponds to its position in the argument list (0-based).
-	for i, paramName := range f.Params {
-		// Define the parameter in the function's current scope.
-		paramSymbol := funcCompiler.currentScope.Define(paramName, Parameter)
-		// Set the index to its position (0-based).
-		paramSymbol.Index = i
-	}
-	// Store the number of parameters in the function's bytecode.
-	funcCompiler.currentBytecode.NumParameters = len(f.Params)
-
-	// 4. Compile the function body using the new compiler instance.
-	// The function body is a BlockStmt.
-	// Use the compileBlockStmt method on the function compiler instance.
-	if err := funcCompiler.compileBlockStmt(f.Body); err != nil {
-		// Leave the scope on error
-		funcCompiler.LeaveScope()
-		// Handle error, potentially propagate it from the sub-compiler.
-		return err
-	}
-
-	// 5. Add an implicit return null at the end of the function body if it doesn't end with return.
-	// Check the last instruction emitted by the function compiler.
-	lastInstrIndex := len(funcCompiler.instructions) - 1
-	if lastInstrIndex < 0 || (funcCompiler.instructions[lastInstrIndex].Op != OpReturnValue && funcCompiler.instructions[lastInstrIndex].Op != OpReturn) {
-		// If the last instruction is not a return, add an implicit return null.
-		funcCompiler.emit(OpNull)
-		funcCompiler.emit(OpReturn)
-	}
-
-	// 6. Leave the function's scope.
-	funcCompiler.LeaveScope()
-
-	// 7. Finalize the function's bytecode object.
-	// The instructions and constants are in funcCompiler.instructions and funcCompiler.constants.
-	funcCompiler.currentBytecode.Instructions = funcCompiler.instructions
-	funcCompiler.currentBytecode.Constants = funcCompiler.constants
-	// Store the number of local variables defined within the function's scope (including parameters).
-	// The symbol table's numDefinitions counts both parameters and locals defined within the body.
-	// The VM needs the total number of slots for locals (parameters + locals).
-	funcCompiler.currentBytecode.NumLocals = funcCompiler.currentScope.NumDefinitions() // Total slots needed for frame
-
-	// 8. Create a Function Object runtime value. This object needs:
-	//    - The compiled funcBytecode
-	//    - Number of parameters (already stored in funcBytecode)
-	//    - Number of local variables (already stored in funcBytecode)
-	//    - (If supporting closures) References to variables from parent scopes that the function uses.
-	//      This is complex and requires analyzing which variables from outer scopes are referenced
-	//      within the function body and capturing them. This is often done by the compiler
-	//      identifying "free variables" and the VM/runtime creating a "closure" object.
-	//      For a basic implementation without closures, you might just need the bytecode, params, and locals count.
-
-	//    Let's define a simple placeholder Function object struct for now.
-	//    You'll need to define this in your VM/runtime value types package.
-	type Function struct {
-		Bytecode      *Bytecode
-		NumParameters int
-		NumLocals     int // Total slots needed for the frame (params + locals)
-		// FreeVariables []*value.Value // For closures (complex)
-	}
-	// Create the function object.
-	funcObject := &Function{
-		Bytecode:      funcCompiler.currentBytecode,
-		NumParameters: funcCompiler.currentBytecode.NumParameters,
-		NumLocals:     funcCompiler.currentBytecode.NumLocals,
-	}
-
-	// 9. Add the Function Object to the constant pool of the *outer* compiler (the one compiling the FuncDefStmt).
-	// This makes the function object available as a constant that can be pushed onto the stack.
-	funcObjConstantIndex := c.addConstant(funcObject) // Use the parent compiler's constant pool
-
-	// 10. Emit OpConstant in the outer compiler to push the Function Object onto the stack.
-	// When the program execution reaches this point, it pushes the function object,
-	// which can then be assigned to a variable or immediately called.
-	c.emit(OpConstant, funcObjConstantIndex)
-
-	// If the function definition is part of an assignment (e.g., `myFunc = function() { ... }`),
-	// the assignment logic will handle storing the function object (which is now on top of the stack)
-	// into the variable. If it's a standalone function definition (anonymous function not assigned),
-	// the OpPop after an expression statement will discard the function object.
-
-	return nil // Function definition compilation implemented
+	// TODO: Implement function definition compilation.
+	return fmt.Errorf("Function definition compilation not yet implemented")
 }
 
-// emit adds an instruction to the bytecode being compiled for the current unit.
-// It returns the starting position (index) of the instruction.
+// emit adds an instruction to the bytecode.
+// It returns the starting position of the emitted instruction.
 func (c *Compiler) emit(op OpCode, operands ...int) int {
-	// TODO: Add operand encoding/decoding logic based on Definition if using []byte
-	// For now, simple integer operands are stored directly in the Instruction struct
-	instr := Instruction{Op: op, Operands: operands}
+	// Get the definition of the opcode to know operand widths.
+	def, ok := Lookup(op)
+	if !ok {
+		// This indicates a compiler bug: trying to emit an undefined opcode.
+		panic(fmt.Sprintf("undefined opcode %d", op)) // Or return an error
+	}
+
+	// Calculate the instruction length (opcode + operands).
+	instructionLen := 1 // Opcode byte
+	for _, width := range def.OperandWidths {
+		instructionLen += width
+	}
+
+	// Create the instruction byte slice.
+	instruction := make([]byte, instructionLen)
+	instruction[0] = byte(op) // First byte is the opcode
+
+	// Encode the operands into the instruction slice.
+	offset := 1 // Start writing operands after the opcode
+	for i, operand := range operands {
+		width := def.OperandWidths[i]
+		switch width {
+		case 1:
+			// 1-byte operand (uint8)
+			instruction[offset] = byte(operand)
+		case 2:
+			// 2-byte operand (uint16)
+			// Use big-endian order (most significant byte first).
+			instruction[offset] = byte(operand >> 8) // High byte
+			instruction[offset+1] = byte(operand)    // Low byte
+		// Add cases for other operand widths if needed (e.g., 4 bytes).
+		default:
+			// This indicates a compiler bug: unknown operand width in definition.
+			panic(fmt.Sprintf("unknown operand width %d for opcode %s", width, def.Name)) // Or return error
+		}
+		offset += width
+	}
+
+	// Store the starting position of the new instruction.
 	pos := len(c.instructions)
-	c.instructions = append(c.instructions, instr)
+
+	// Append the new instruction to the compiler's instruction slice.
+	c.instructions = append(c.instructions, Instruction{Op: op, Operands: operands}) // Store parsed operands for now
+
+	// If you were using a []byte slice for instructions, you would append the byte slice here.
+	// c.instructions = append(c.instructions, instruction...)
+
 	return pos
 }
 
-// emitConstant adds a constant value to the constant pool of the current unit
-// and emits OpConstant instruction.
-func (c *Compiler) emitConstant(val interface{}) {
-	// TODO: Check if constant already exists to avoid duplicates (Optimization)
-	c.constants = append(c.constants, val)
-	c.emit(OpConstant, len(c.constants)-1)
+// emitConstant adds a constant to the constant pool and emits an OpConstant instruction.
+// It returns the starting position of the emitted instruction.
+func (c *Compiler) emitConstant(value interface{}) int {
+	// Add the value to the constant pool.
+	constantIndex := c.addConstant(value)
+
+	// Emit an OpConstant instruction with the index of the constant.
+	// OpConstant expects a 2-byte operand for the constant index.
+	return c.emit(OpConstant, constantIndex)
 }
 
-// patchJump sets the operand of a previously emitted jump instruction
-// to the current position in the instruction stream.
-// This is used to fix forward jumps (e.g., in if/while statements).
-func (c *Compiler) patchJump(pos int) {
-	// The target address is the instruction *after* the current end of the instructions.
-	target := len(c.instructions)
-	if pos < 0 || pos >= len(c.instructions) || len(c.instructions[pos].Operands) == 0 {
-		// Basic validation for the position and if it has an operand.
-		fmt.Printf("WARNING: Attempted to patch invalid jump at position %d\n", pos)
-		return
+// addConstant adds a value to the constant pool and returns its index.
+func (c *Compiler) addConstant(value interface{}) int {
+	// Check if the constant already exists in the pool to avoid duplicates.
+	// This requires value equality checking, which can be complex for custom types.
+	// For now, we'll just append, allowing duplicates. Optimization can be added later.
+
+	// Store the index before appending.
+	index := len(c.constants)
+
+	// Append the value to the constant pool.
+	c.constants = append(c.constants, value)
+
+	return index
+}
+
+// patchJump updates the operand of a jump instruction at a given position.
+// The operand is the target instruction address.
+func (c *Compiler) patchJump(instrPos int) {
+	// The target address is the position of the instruction *after* the jump.
+	targetAddress := len(c.instructions)
+
+	// Get the instruction to patch.
+	instruction := &c.instructions[instrPos]
+
+	// Get the definition to know the operand width (should be 2 for jump targets).
+	def, ok := Lookup(instruction.Op)
+	if !ok || len(def.OperandWidths) != 1 || def.OperandWidths[0] != 2 {
+		// This indicates a compiler bug: trying to patch a non-jump instruction
+		// or a jump instruction with an unexpected operand structure.
+		panic(fmt.Sprintf("cannot patch instruction at %d: not a 2-byte jump operand", instrPos)) // Or return error
 	}
-	// Assumes the jump target operand is the first (and usually only) operand.
-	c.instructions[pos].Operands[0] = target
-}
 
-// addConstant adds a constant to the current compilation unit's constant pool.
-// This is a helper used internally by emitConstant and compileFuncDef.
-func (c *Compiler) addConstant(obj interface{}) int {
-	// TODO: Check for duplicates
-	c.constants = append(c.constants, obj)
-	return len(c.constants) - 1
-}
+	// Update the operand with the correct target address.
+	instruction.Operands[0] = targetAddress
 
-// GetBytecode returns the compiled bytecode for the current compilation unit.
-// This is called after the top-level Compile finishes (for the program)
-// or after a function body is compiled (by the parent compiler).
-func (c *Compiler) GetBytecode() *Bytecode {
-	// Ensure the Bytecode struct holds the final instructions and constants.
-	c.currentBytecode.Instructions = c.instructions
-	c.currentBytecode.Constants = c.constants
-	// NumLocals and NumParameters should be set during function compilation.
-	// For the main program, NumLocals is typically 0.
-
-	return c.currentBytecode
-}
-
-// NumGlobalVariables returns the total number of global variables defined in the program.
-// This is only meaningful for the top-level compiler instance after program compilation.
-func (c *Compiler) NumGlobalVariables() int {
-	// The number of globals is tracked separately as numGlobals.
-	return c.numGlobals
+	// If you were using a []byte slice for instructions, you would need to
+	// update the bytes in the slice directly at instrPos + 1 and instrPos + 2.
+	/*
+		// Ensure the byte slice is large enough
+		if instrPos+3 > len(c.currentBytecode.Instructions) {
+			panic("bytecode slice too short for patching") // Or return error
+		}
+		// Encode the target address (uint16) into the byte slice (big-endian).
+		c.currentBytecode.Instructions[instrPos+1] = byte(targetAddress >> 8) // High byte
+		c.currentBytecode.Instructions[instrPos+2] = byte(targetAddress)    // Low byte
+	*/
 }

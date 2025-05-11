@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"fmt" // Import fmt for debugging prints
 	"go/token"
 	"strconv"
 
@@ -20,66 +21,148 @@ func NewASTBuilder() *ASTBuilder {
 
 // VisitProgram builds the root Program node.
 func (v *ASTBuilder) VisitProgram(ctx *parser.ProgramContext) interface{} {
+	fmt.Println("DEBUG: Visiting Program") // Debug print
 	prog := &Program{PosToken: token.Pos(ctx.GetStart().GetStart())}
 	// The grammar ensures StatementList is present if there are statements
 	if ctx.StatementList() != nil {
+		fmt.Println("DEBUG: Visiting StatementList from VisitProgram") // Debug print
 		// VisitStatementList returns []Statement, which we append to the program's Stmts
-		if stmts, ok := ctx.StatementList().Accept(v).([]Statement); ok {
+		visitedStmts := ctx.StatementList().Accept(v)                                                       // Get the result first
+		fmt.Printf("DEBUG: VisitStatementList returned type: %T, value: %+v\n", visitedStmts, visitedStmts) // Debug print
+		if stmts, ok := visitedStmts.([]Statement); ok {
 			prog.Stmts = append(prog.Stmts, stmts...)
+			fmt.Printf("DEBUG: Appended %d statements to Program\n", len(stmts)) // Debug print
+		} else {
+			fmt.Printf("WARNING: VisitStatementList did not return []Statement, got %T\n", visitedStmts) // Debug print
 		}
 	}
+	fmt.Printf("DEBUG: Finished Visiting Program, returning %+v (Stmts count: %d)\n", prog, len(prog.Stmts)) // Debug print
 	return prog
 }
 
 // VisitStatementList handles one or more statements
 func (v *ASTBuilder) VisitStatementList(ctx *parser.StatementListContext) interface{} {
+	fmt.Println("DEBUG: Visiting StatementList") // Debug print
 	var stmts []Statement
 	// Iterate through all statement contexts and visit them
-	for _, sctx := range ctx.AllStatement() {
+	for i, sctx := range ctx.AllStatement() {
+		fmt.Printf("DEBUG: Visiting statement context #%d (type: %T) from VisitStatementList\n", i, sctx) // Debug print
 		// Each statement visit should return a Statement node
-		if stmt, ok := sctx.Accept(v).(Statement); ok {
-			stmts = append(stmts, stmt)
+		stmt := sctx.Accept(v)                                                                    // Call Accept on the StatementContext
+		fmt.Printf("DEBUG: Statement context #%d returned type: %T, value: %+v\n", i, stmt, stmt) // Debug print
+		if stmtNode, ok := stmt.(Statement); ok {
+			stmts = append(stmts, stmtNode)
+			fmt.Printf("DEBUG: Appended statement #%d (type: %T) to StatementList\n", i, stmtNode) // Debug print
+		} else {
+			fmt.Printf("  WARNING: Visited statement context type %T did not return a Statement interface, got %T\n", sctx, stmt) // Debug print
 		}
 	}
-	return stmts // Returns []Statement
+	fmt.Printf("DEBUG: Finished Visiting StatementList, returning %d statements\n", len(stmts)) // Debug print
+	return stmts                                                                                // Returns []Statement
 }
 
 // VisitStatement handles a single statement (either simple or compound).
 // This method is crucial for ensuring the result from sub-visits is propagated.
 func (v *ASTBuilder) VisitStatement(ctx *parser.StatementContext) interface{} {
+	fmt.Println("DEBUG: Visiting Statement") // Debug print
 	// A statement context has only one child which is either a simpleStmt or compoundStmt
 	if ctx.SimpleStmt() != nil {
-		return ctx.SimpleStmt().Accept(v) // Return the result from visiting the simple statement
+		fmt.Println("DEBUG: Visiting SimpleStmt from VisitStatement") // Debug print
+		result := ctx.SimpleStmt().Accept(v)
+		fmt.Printf("DEBUG: SimpleStmt.Accept(v) returned type: %T, value: %+v\n", result, result)   // Debug print
+		fmt.Printf("DEBUG: Finished Visiting Statement (SimpleStmt), returning type: %T\n", result) // Debug print
+		return result                                                                               // Return the result from visiting the simple statement
 	}
 	if ctx.CompoundStmt() != nil {
-		return ctx.CompoundStmt().Accept(v) // Return the result from visiting the compound statement
+		fmt.Println("DEBUG: Visiting CompoundStmt from VisitStatement") // Debug print
+		result := ctx.CompoundStmt().Accept(v)
+		fmt.Printf("DEBUG: CompoundStmt.Accept(v) returned type: %T, value: %+v\n", result, result)   // Debug print
+		fmt.Printf("DEBUG: Finished Visiting Statement (CompoundStmt), returning type: %T\n", result) // Debug print
+		return result                                                                                 // Return the result from visiting the compound statement
 	}
-	return nil // Should not happen if grammar is correct
+	fmt.Printf("WARNING: Visiting Statement, unexpected context type: %T\n", ctx) // Debug print
+	return nil                                                                    // Should not happen if grammar is correct
 }
 
 // VisitSimpleStmt handles a simple statement (assignment, exprStmt, printStmt, returnStmt).
 // This method is crucial for ensuring the result from sub-visits is propagated.
 func (v *ASTBuilder) VisitSimpleStmt(ctx *parser.SimpleStmtContext) interface{} {
+	fmt.Println("DEBUG: Visiting SimpleStmt") // Debug print
 	// A simpleStmt context has only one child which is one of the simple statement types
 	if ctx.Assignment() != nil {
-		return ctx.Assignment().Accept(v) // Return the result from visiting the assignment
+		fmt.Println("DEBUG: Visiting Assignment from VisitSimpleStmt") // Debug print
+		result := ctx.Assignment().Accept(v)
+		fmt.Printf("DEBUG: Assignment.Accept(v) returned type: %T, value: %+v\n", result, result)    // Debug print
+		fmt.Printf("DEBUG: Finished Visiting SimpleStmt (Assignment), returning type: %T\n", result) // Debug print
+		return result                                                                                // Return the result from visiting the assignment
 	}
 	if ctx.ExprStmt() != nil {
-		return ctx.ExprStmt().Accept(v) // Return the result from visiting the expression statement
+		fmt.Println("DEBUG: Visiting ExprStmt from VisitSimpleStmt") // Debug print
+		result := ctx.ExprStmt().Accept(v)
+		fmt.Printf("DEBUG: ExprStmt.Accept(v) returned type: %T, value: %+v\n", result, result)    // Debug print
+		fmt.Printf("DEBUG: Finished Visiting SimpleStmt (ExprStmt), returning type: %T\n", result) // Debug print
+		return result                                                                              // Return the result from visiting the expression statement
 	}
 	if ctx.PrintStmt() != nil {
-		return ctx.PrintStmt().Accept(v) // Return the result from visiting the print statement
+		fmt.Println("DEBUG: Visiting PrintStmt from VisitSimpleStmt") // Debug print
+		result := ctx.PrintStmt().Accept(v)
+		fmt.Printf("DEBUG: PrintStmt.Accept(v) returned type: %T, value: %+v\n", result, result)    // Debug print
+		fmt.Printf("DEBUG: Finished Visiting SimpleStmt (PrintStmt), returning type: %T\n", result) // Debug print
+		return result                                                                               // Return the result from visiting the print statement
 	}
 	if ctx.ReturnStmt() != nil {
-		return ctx.ReturnStmt().Accept(v) // Return the result from visiting the return statement
+		fmt.Println("DEBUG: Visiting ReturnStmt from VisitSimpleStmt") // Debug print
+		result := ctx.ReturnStmt().Accept(v)
+		fmt.Printf("DEBUG: ReturnStmt.Accept(v) returned type: %T, value: %+v\n", result, result)    // Debug print
+		fmt.Printf("DEBUG: Finished Visiting SimpleStmt (ReturnStmt), returning type: %T\n", result) // Debug print
+		return result                                                                                // Return the result from visiting the return statement
 	}
-	return nil // Should not happen if grammar is correct
+	fmt.Printf("WARNING: Visiting SimpleStmt, unexpected context type: %T\n", ctx) // Debug print
+	return nil                                                                     // Should not happen if grammar is correct
+}
+
+// VisitCompoundStmt handles compound statements (if, while, for, functionDef).
+// This method is crucial for ensuring the result from sub-visits is propagated.
+func (v *ASTBuilder) VisitCompoundStmt(ctx *parser.CompoundStmtContext) interface{} {
+	fmt.Println("DEBUG: Visiting CompoundStmt") // Debug print
+	// A compoundStmt context has only one child which is one of the compound statement types
+	if ctx.IfStmt() != nil {
+		fmt.Println("DEBUG: Visiting IfStmt from VisitCompoundStmt") // Debug print
+		result := ctx.IfStmt().Accept(v)
+		fmt.Printf("DEBUG: IfStmt.Accept(v) returned type: %T, value: %+v\n", result, result)      // Debug print
+		fmt.Printf("DEBUG: Finished Visiting CompoundStmt (IfStmt), returning type: %T\n", result) // Debug print
+		return result                                                                              // Return the result from visiting the if statement
+	}
+	if ctx.WhileStmt() != nil {
+		fmt.Println("DEBUG: Visiting WhileStmt from VisitCompoundStmt") // Debug print
+		result := ctx.WhileStmt().Accept(v)
+		fmt.Printf("DEBUG: WhileStmt.Accept(v) returned type: %T, value: %+v\n", result, result)      // Debug print
+		fmt.Printf("DEBUG: Finished Visiting CompoundStmt (WhileStmt), returning type: %T\n", result) // Debug print
+		return result                                                                                 // Return the result from visiting the while statement
+	}
+	if ctx.ForStmt() != nil {
+		fmt.Println("DEBUG: Visiting ForStmt from VisitCompoundStmt") // Debug print
+		result := ctx.ForStmt().Accept(v)
+		fmt.Printf("DEBUG: ForStmt.Accept(v) returned type: %T, value: %+v\n", result, result)      // Debug print
+		fmt.Printf("DEBUG: Finished Visiting CompoundStmt (ForStmt), returning type: %T\n", result) // Debug print
+		return result                                                                               // Return the result from visiting the for statement
+	}
+	if ctx.FunctionDef() != nil {
+		fmt.Println("DEBUG: Visiting FunctionDef from VisitCompoundStmt") // Debug print
+		result := ctx.FunctionDef().Accept(v)
+		fmt.Printf("DEBUG: FunctionDef.Accept(v) returned type: %T, value: %+v\n", result, result)      // Debug print
+		fmt.Printf("DEBUG: Finished Visiting CompoundStmt (FunctionDef), returning type: %T\n", result) // Debug print
+		return result                                                                                   // Return the result from visiting the function definition
+	}
+	fmt.Printf("WARNING: Visiting CompoundStmt, unexpected context type: %T\n", ctx) // Debug print
+	return nil                                                                       // Should not happen if grammar is correct
 }
 
 // --- Simple statements ---
 
 // VisitAssignment builds an AssignStmt node.
 func (v *ASTBuilder) VisitAssignment(ctx *parser.AssignmentContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Assignment") // Less verbose debug print
 	// Target must be a Primary expression (e.g., identifier, index, call)
 	target := ctx.Primary().Accept(v).(Expression)
 	// Value is any Expression
@@ -89,6 +172,7 @@ func (v *ASTBuilder) VisitAssignment(ctx *parser.AssignmentContext) interface{} 
 
 // VisitExprStmt builds an ExprStmt node.
 func (v *ASTBuilder) VisitExprStmt(ctx *parser.ExprStmtContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ExprStmt") // Less verbose debug print
 	// The statement is just an expression
 	expr := ctx.Expression().Accept(v).(Expression)
 	return &ExprStmt{Expr: expr, PosToken: token.Pos(ctx.GetStart().GetStart())}
@@ -96,19 +180,28 @@ func (v *ASTBuilder) VisitExprStmt(ctx *parser.ExprStmtContext) interface{} {
 
 // VisitPrintStmt builds a PrintStmt node.
 func (v *ASTBuilder) VisitPrintStmt(ctx *parser.PrintStmtContext) interface{} {
+	fmt.Println("DEBUG: Visiting PrintStmt") // Debug print
 	var exprs []Expression
 	// Check if ExpressionListOpt has an actual ExpressionList
 	if el := ctx.ExpressionListOpt().ExpressionList(); el != nil {
 		// Visit the expression list to get the slice of expressions
-		if visitedExprs, ok := el.Accept(v).([]Expression); ok {
-			exprs = visitedExprs
+		visitedExprs := el.Accept(v)                                                                     // Get the result first
+		fmt.Printf("DEBUG: Visited ExpressionListOpt.ExpressionList, returned type: %T\n", visitedExprs) // Debug print
+		if visitedExprsSlice, ok := visitedExprs.([]Expression); ok {
+			exprs = visitedExprsSlice
+			fmt.Printf("DEBUG: Collected %d expressions for PrintStmt\n", len(exprs)) // Debug print
+		} else {
+			fmt.Printf("  WARNING: Visiting ExpressionListOpt.ExpressionList did not return []Expression, got %T\n", visitedExprs) // Debug print
 		}
 	}
-	return &PrintStmt{Exprs: exprs, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	printStmtNode := &PrintStmt{Exprs: exprs, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	fmt.Printf("DEBUG: Finished Visiting PrintStmt, returning %+v\n", printStmtNode) // Debug print
+	return printStmtNode                                                             // Ensure *ast.PrintStmt is returned
 }
 
 // VisitReturnStmt builds a ReturnStmt node.
 func (v *ASTBuilder) VisitReturnStmt(ctx *parser.ReturnStmtContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ReturnStmt") // Less verbose debug print
 	var expr Expression
 	// Check if ExpressionOpt has an actual Expression
 	if ctx.ExpressionOpt().Expression() != nil {
@@ -122,6 +215,7 @@ func (v *ASTBuilder) VisitReturnStmt(ctx *parser.ReturnStmtContext) interface{} 
 
 // VisitIfStmt builds an IfStmt node.
 func (v *ASTBuilder) VisitIfStmt(ctx *parser.IfStmtContext) interface{} {
+	fmt.Println("DEBUG: Visiting IfStmt") // Debug print
 	// Visit the main condition and the 'then' block
 	cond := ctx.Expression().Accept(v).(Expression)
 	then := ctx.Block().Accept(v).(*BlockStmt)
@@ -146,30 +240,39 @@ func (v *ASTBuilder) VisitIfStmt(ctx *parser.IfStmtContext) interface{} {
 		elseBlk = ctx.ElseBlockOpt().Block().Accept(v).(*BlockStmt)
 	}
 
-	return &IfStmt{Cond: cond, Then: then, ElseIfs: elseIfs, Else: elseBlk, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	ifStmtNode := &IfStmt{Cond: cond, Then: then, ElseIfs: elseIfs, Else: elseBlk, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	fmt.Printf("DEBUG: Finished Visiting IfStmt, returning %+v\n", ifStmtNode) // Debug print
+	return ifStmtNode
 }
 
 // VisitWhileStmt builds a WhileStmt node.
 func (v *ASTBuilder) VisitWhileStmt(ctx *parser.WhileStmtContext) interface{} {
+	fmt.Println("DEBUG: Visiting WhileStmt") // Debug print
 	// Visit the loop condition and body block
 	cond := ctx.Expression().Accept(v).(Expression)
 	body := ctx.Block().Accept(v).(*BlockStmt)
-	return &WhileStmt{Cond: cond, Body: body, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	whileStmtNode := &WhileStmt{Cond: cond, Body: body, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	fmt.Printf("DEBUG: Finished Visiting WhileStmt, returning %+v\n", whileStmtNode) // Debug print
+	return whileStmtNode
 }
 
 // VisitForStmt builds a ForStmt node.
 func (v *ASTBuilder) VisitForStmt(ctx *parser.ForStmtContext) interface{} {
+	fmt.Println("DEBUG: Visiting ForStmt") // Debug print
 	// Get the variable name from the IDENTIFIER token
 	varName := ctx.IDENTIFIER().GetText()
 	// Visit the iterable expression
 	iter := ctx.Expression().Accept(v).(Expression)
 	// Visit the loop body block
 	body := ctx.Block().Accept(v).(*BlockStmt)
-	return &ForStmt{Variable: varName, Iterable: iter, Body: body, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	forStmtNode := &ForStmt{Variable: varName, Iterable: iter, Body: body, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	fmt.Printf("DEBUG: Finished Visiting ForStmt, returning %+v\n", forStmtNode) // Debug print
+	return forStmtNode
 }
 
 // VisitFunctionDef builds a FuncDefStmt node.
 func (v *ASTBuilder) VisitFunctionDef(ctx *parser.FunctionDefContext) interface{} {
+	fmt.Println("DEBUG: Visiting FunctionDef") // Debug print
 	var params []string
 	// Check for optional parameter list
 	if pl := ctx.ParamListOpt().ParamList(); pl != nil {
@@ -183,17 +286,22 @@ func (v *ASTBuilder) VisitFunctionDef(ctx *parser.FunctionDefContext) interface{
 	// Note: Function name is not part of the grammar rule itself,
 	// it would typically be assigned via an assignment statement,
 	// e.g., `myFunc = function() { ... }`. The AST node reflects this.
-	return &FuncDefStmt{Name: "", Params: params, Body: body, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	funcDefStmtNode := &FuncDefStmt{Name: "", Params: params, Body: body, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	fmt.Printf("DEBUG: Finished Visiting FunctionDef, returning %+v\n", funcDefStmtNode) // Debug print
+	return funcDefStmtNode
 }
 
 // VisitBlock builds a BlockStmt node.
 func (v *ASTBuilder) VisitBlock(ctx *parser.BlockContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Block") // Less verbose debug print
 	var stmts []Statement
 	// Check for optional statement list within the block
 	if sl := ctx.StatementListOpt().StatementList(); sl != nil {
 		// Visit the statement list to get the slice of statements
-		if visitedStmts, ok := sl.Accept(v).([]Statement); ok {
-			stmts = visitedStmts
+		visitedStmts := sl.Accept(v) // Get result first
+		// fmt.Printf("DEBUG: Visited StatementListOpt.StatementList, returned type: %T\n", visitedStmts) // Less verbose debug print
+		if visitedStmtsSlice, ok := visitedStmts.([]Statement); ok {
+			stmts = visitedStmtsSlice
 		}
 	}
 	return &BlockStmt{Stmts: stmts, PosToken: token.Pos(ctx.GetStart().GetStart())}
@@ -201,17 +309,20 @@ func (v *ASTBuilder) VisitBlock(ctx *parser.BlockContext) interface{} {
 
 // VisitExpressionList handles a comma-separated list of expressions.
 func (v *ASTBuilder) VisitExpressionList(ctx *parser.ExpressionListContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ExpressionList") // Less verbose debug print
 	var exprs []Expression
 	// Iterate through all expression contexts in the list
 	for _, e := range ctx.AllExpression() {
 		// Visit each expression
-		exprs = append(exprs, e.Accept(v).(Expression))
+		expr := e.Accept(v).(Expression)
+		exprs = append(exprs, expr)
 	}
 	return exprs // Returns []Expression
 }
 
 // VisitParamList handles a comma-separated list of identifiers for function parameters.
 func (v *ASTBuilder) VisitParamList(ctx *parser.ParamListContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ParamList") // Less verbose debug print
 	var params []string
 	// Iterate through all IDENTIFIER tokens in the parameter list
 	for _, id := range ctx.AllIDENTIFIER() {
@@ -224,11 +335,13 @@ func (v *ASTBuilder) VisitParamList(ctx *parser.ParamListContext) interface{} {
 
 // VisitExpression simply visits the top-level logicalOr expression.
 func (v *ASTBuilder) VisitExpression(ctx *parser.ExpressionContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Expression") // Less verbose debug print
 	return ctx.LogicalOr().Accept(v)
 }
 
 // VisitLogicalOr handles 'or' operations (left-associative).
 func (v *ASTBuilder) VisitLogicalOr(ctx *parser.LogicalOrContext) interface{} {
+	// fmt.Println("DEBUG: Visiting LogicalOr") // Less verbose debug print
 	// Start with the first logicalAnd expression
 	expr := ctx.LogicalAnd(0).Accept(v).(Expression)
 	// Iterate through children to find 'or' tokens
@@ -245,6 +358,7 @@ func (v *ASTBuilder) VisitLogicalOr(ctx *parser.LogicalOrContext) interface{} {
 
 // VisitLogicalAnd handles 'and' operations (left-associative).
 func (v *ASTBuilder) VisitLogicalAnd(ctx *parser.LogicalAndContext) interface{} {
+	// fmt.Println("DEBUG: Visiting LogicalAnd") // Less verbose debug print
 	// Start with the first comparison expression
 	expr := ctx.Comparison(0).Accept(v).(Expression)
 	// Iterate through children to find 'and' tokens
@@ -261,6 +375,7 @@ func (v *ASTBuilder) VisitLogicalAnd(ctx *parser.LogicalAndContext) interface{} 
 
 // VisitComparison handles comparison operations (chainable, but typically left-associative evaluation).
 func (v *ASTBuilder) VisitComparison(ctx *parser.ComparisonContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Comparison") // Less verbose debug print
 	// Start with the first arithmetic expression
 	expr := ctx.Arith(0).Accept(v).(Expression)
 	// Iterate through children to find comparison operator tokens
@@ -283,6 +398,7 @@ func (v *ASTBuilder) VisitComparison(ctx *parser.ComparisonContext) interface{} 
 
 // VisitArith handles addition and subtraction operations (left-associative).
 func (v *ASTBuilder) VisitArith(ctx *parser.ArithContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Arith") // Less verbose debug print
 	// Start with the first term expression
 	expr := ctx.Term(0).Accept(v).(Expression)
 	// Iterate through children to find '+' or '-' operator tokens
@@ -301,6 +417,7 @@ func (v *ASTBuilder) VisitArith(ctx *parser.ArithContext) interface{} {
 
 // VisitTerm handles multiplication, division, and modulo operations (left-associative).
 func (v *ASTBuilder) VisitTerm(ctx *parser.TermContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Term") // Less verbose debug print
 	// Start with the first factor expression
 	expr := ctx.Factor(0).Accept(v).(Expression)
 	// Iterate through subsequent '*', '/', or '%' operators and right-hand operands
@@ -323,6 +440,7 @@ func (v *ASTBuilder) VisitTerm(ctx *parser.TermContext) interface{} {
 
 // VisitFactor handles exponentiation operations (right-associative).
 func (v *ASTBuilder) VisitFactor(ctx *parser.FactorContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Factor") // Less verbose debug print
 	// Start with the first unary expression
 	expr := ctx.Unary(0).Accept(v).(Expression)
 	// Iterate through subsequent '^' operators and right-hand operands
@@ -345,6 +463,7 @@ func (v *ASTBuilder) VisitFactor(ctx *parser.FactorContext) interface{} {
 
 // VisitUnary handles unary operations ('+', '-', 'not').
 func (v *ASTBuilder) VisitUnary(ctx *parser.UnaryContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Unary") // Less verbose debug print
 	// Check if it's a unary operation (has 2 children: operator and expression)
 	if ctx.GetChildCount() == 2 {
 		opNode := ctx.GetChild(0).(antlr.TerminalNode) // Get the operator token node
@@ -368,6 +487,7 @@ func (v *ASTBuilder) VisitUnary(ctx *parser.UnaryContext) interface{} {
 
 // VisitPrimary handles primary expressions, including indexing and function calls.
 func (v *ASTBuilder) VisitPrimary(ctx *parser.PrimaryContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Primary") // Less verbose debug print
 	// Start with the base atom
 	expr := ctx.Atom().Accept(v).(Expression)
 
@@ -432,6 +552,7 @@ func (v *ASTBuilder) VisitPrimary(ctx *parser.PrimaryContext) interface{} {
 
 // VisitAtom handles the different types of atoms (literals, identifiers, lists, tables, parenthesized expressions).
 func (v *ASTBuilder) VisitAtom(ctx *parser.AtomContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Atom") // Less verbose debug print
 	// Check which alternative the atom matches and visit accordingly
 	if lit := ctx.Literal(); lit != nil {
 		return lit.Accept(v)
@@ -458,6 +579,7 @@ func (v *ASTBuilder) VisitAtom(ctx *parser.AtomContext) interface{} {
 
 // VisitListLiteral builds a ListLiteral node.
 func (v *ASTBuilder) VisitListLiteral(ctx *parser.ListLiteralContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ListLiteral") // Less verbose debug print
 	var elems []Expression
 	// Check for optional expression list within the brackets
 	if el := ctx.ExpressionListOpt().ExpressionList(); el != nil {
@@ -471,6 +593,7 @@ func (v *ASTBuilder) VisitListLiteral(ctx *parser.ListLiteralContext) interface{
 
 // VisitTableLiteral builds a TableLiteral node.
 func (v *ASTBuilder) VisitTableLiteral(ctx *parser.TableLiteralContext) interface{} {
+	// fmt.Println("DEBUG: Visiting TableLiteral") // Less verbose debug print
 	var fields []Field
 	// Check for optional field list within the braces
 	if fl := ctx.FieldListOpt().FieldList(); fl != nil {
@@ -498,6 +621,7 @@ func (v *ASTBuilder) VisitField(ctx *parser.FieldContext) interface{} {
 // VisitExpressionListOpt handles the optional expression list.
 // If the list is present, it visits it. Otherwise, it returns nil.
 func (v *ASTBuilder) VisitExpressionListOpt(ctx *parser.ExpressionListOptContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ExpressionListOpt") // Less verbose debug print
 	if ctx.ExpressionList() != nil {
 		return ctx.ExpressionList().Accept(v)
 	}
@@ -507,6 +631,7 @@ func (v *ASTBuilder) VisitExpressionListOpt(ctx *parser.ExpressionListOptContext
 // VisitParamListOpt handles the optional parameter list.
 // If the list is present, it visits it. Otherwise, it returns nil.
 func (v *ASTBuilder) VisitParamListOpt(ctx *parser.ParamListOptContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ParamListOpt") // Less verbose debug print
 	if ctx.ParamList() != nil {
 		return ctx.ParamList().Accept(v)
 	}
@@ -516,6 +641,7 @@ func (v *ASTBuilder) VisitParamListOpt(ctx *parser.ParamListOptContext) interfac
 // VisitStatementListOpt handles the optional statement list.
 // If the list is present, it visits it. Otherwise, it returns nil.
 func (v *ASTBuilder) VisitStatementListOpt(ctx *parser.StatementListOptContext) interface{} {
+	// fmt.Println("DEBUG: Visiting StatementListOpt") // Less verbose debug print
 	if ctx.StatementList() != nil {
 		return ctx.StatementList().Accept(v)
 	}
@@ -525,6 +651,7 @@ func (v *ASTBuilder) VisitStatementListOpt(ctx *parser.StatementListOptContext) 
 // VisitExpressionOpt handles the optional expression.
 // If the expression is present, it visits it. Otherwise, it returns nil.
 func (v *ASTBuilder) VisitExpressionOpt(ctx *parser.ExpressionOptContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ExpressionOpt") // Less verbose debug print
 	if ctx.Expression() != nil {
 		return ctx.Expression().Accept(v)
 	}
@@ -534,6 +661,7 @@ func (v *ASTBuilder) VisitExpressionOpt(ctx *parser.ExpressionOptContext) interf
 // VisitElseifListOpt handles the optional elseif list.
 // If the list is present, it visits it. Otherwise, it returns nil.
 func (v *ASTBuilder) VisitElseifListOpt(ctx *parser.ElseifListOptContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ElseifListOpt") // Less verbose debug print
 	if ctx.ElseifList() != nil {
 		return ctx.ElseifList().Accept(v)
 	}
@@ -542,6 +670,7 @@ func (v *ASTBuilder) VisitElseifListOpt(ctx *parser.ElseifListOptContext) interf
 
 // VisitElseifList handles one or more elseif clauses.
 func (v *ASTBuilder) VisitElseifList(ctx *parser.ElseifListContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ElseifList") // Less verbose debug print
 	var elseIfs []ElseIf
 	for _, eis := range ctx.AllElseif() {
 		// Visit each elseif clause, which should return an ElseIf struct
@@ -556,6 +685,7 @@ func (v *ASTBuilder) VisitElseifList(ctx *parser.ElseifListContext) interface{} 
 // Note: This is called by VisitElseifList, it doesn't return an AST node itself,
 // but a struct used within the IfStmt node.
 func (v *ASTBuilder) VisitElseif(ctx *parser.ElseifContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Elseif") // Less verbose debug print
 	cond := ctx.Expression().Accept(v).(Expression)
 	body := ctx.Block().Accept(v).(*BlockStmt)
 	return ElseIf{Cond: cond, Body: body, PosToken: token.Pos(ctx.GetStart().GetStart())}
@@ -564,6 +694,7 @@ func (v *ASTBuilder) VisitElseif(ctx *parser.ElseifContext) interface{} {
 // VisitElseBlockOpt handles the optional else block.
 // If the block is present, it visits it. Otherwise, it returns nil.
 func (v *ASTBuilder) VisitElseBlockOpt(ctx *parser.ElseBlockOptContext) interface{} {
+	// fmt.Println("DEBUG: Visiting ElseBlockOpt") // Less verbose debug print
 	if ctx.Block() != nil {
 		return ctx.Block().Accept(v)
 	}
@@ -572,6 +703,7 @@ func (v *ASTBuilder) VisitElseBlockOpt(ctx *parser.ElseBlockOptContext) interfac
 
 // VisitLiteral handles the different types of literals.
 func (v *ASTBuilder) VisitLiteral(ctx *parser.LiteralContext) interface{} {
+	// fmt.Println("DEBUG: Visiting Literal") // Less verbose debug print
 	// Check which type of literal it is and parse/build the corresponding AST node
 	if i := ctx.INTEGER(); i != nil {
 		val, _ := strconv.ParseInt(i.GetText(), 10, 64) // Error handling omitted for brevity
