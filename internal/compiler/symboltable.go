@@ -28,19 +28,28 @@ type SymbolTable struct {
 	// For local scopes (functions/blocks), tracks the number of defined variables.
 	// This determines the size of the locals array needed for a frame.
 	numDefinitions int
+
+	// Indicates if this symbol table represents a function scope.
+	// This is used by the compiler to determine whether to emit OpGetLocal/OpSetLocal
+	// or OpGetGlobal/OpSetGlobal for variable access.
+	isFunctionScope bool
 }
 
 // NewSymbolTable creates a new symbol table (for the global scope).
+// The global scope is not a function scope.
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
-		store: make(map[string]*Symbol),
+		store:           make(map[string]*Symbol),
+		isFunctionScope: false, // Global scope is not a function scope
 	}
 }
 
 // NewEnclosedSymbolTable creates a new symbol table with an outer scope.
-func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
-	s := NewSymbolTable()
+// isFunc should be true if this new table represents a function scope, false otherwise (block scope).
+func NewEnclosedSymbolTable(outer *SymbolTable, isFunc bool) *SymbolTable {
+	s := NewSymbolTable() // Creates a base table (with isFunctionScope=false initially)
 	s.Outer = outer
+	s.isFunctionScope = isFunc // Set the correct function scope status
 	return s
 }
 

@@ -53,19 +53,8 @@ func NewFrame(closure *types.Closure, basePointer int) *Frame {
 	// Copy arguments from the stack into the beginning of the locals slice.
 	// Arguments are on the stack right before the function object, starting at basePointer + 1.
 	// The number of arguments is closure.Fn.NumParameters.
-	for i := 0; i < closure.Fn.NumParameters; i++ {
-		// Arguments are at stack[basePointer + 1 + i]
-		// Locals for this frame start at locals[i]
-		// Note: This assumes arguments are pushed onto the stack immediately before the function object.
-		// The compiler's OpCall logic should ensure this.
-		// The basePointer points to the function object itself. The arguments are after it.
-		// The arguments are at stack[basePointer + 1] to stack[basePointer + NumParameters].
-		// The locals array for the new frame starts at index 0.
-		// So, locals[i] should get the value from stack[basePointer + 1 + i].
-		// This needs to be handled by the VM when pushing the frame.
-		// The NewFrame function itself just creates the frame structure.
-		// The VM's OpCall instruction is responsible for copying arguments into the new frame's locals.
-	}
+	// This copying is done in the VM's OpCall case, not here.
+	// The NewFrame function just creates the frame structure with the correct locals slice size.
 
 	return &Frame{
 		closure:     closure,
@@ -89,7 +78,8 @@ func New(bytecode *compiler.Bytecode) *VM { // Takes *compiler.Bytecode
 	mainFn := &types.CompiledFunction{Instructions: bytecode.Instructions, NumLocals: bytecode.NumLocals, NumParameters: bytecode.NumParameters}
 	mainClosure := &types.Closure{Fn: mainFn}
 	// The base pointer for the main frame is 0, as it starts at the bottom of the stack.
-	mainFrame := NewFrame(mainClosure, 0) // NewFrame is defined in vm package
+	// The main program's frame should have 0 locals, as variables are global.
+	mainFrame := NewFrame(mainClosure, 0) // NewFrame is defined in vm package. NumLocals for mainFn should be 0.
 
 	// Initialize the frames stack with the main frame.
 	frames := make([]*Frame, MaxFrames)
@@ -453,7 +443,7 @@ func (vm *VM) Run() error {
 			// The base pointer for the new frame is the position *before* the function object.
 			// The arguments are at stack[vm.sp - numArgs] to stack[vm.sp - 1].
 			// The function object is at stack[vm.sp - numArgs - 1].
-			// The base pointer for the new frame is vm.sp - numArgs - 1.
+			// The base pointer for the new frame is vm.sp - int(numArgs) - 1.
 			basePointer := vm.sp - int(numArgs) - 1
 
 			// Get the function object from the stack (it's at basePointer).
@@ -473,7 +463,7 @@ func (vm *VM) Run() error {
 
 			// Create a new call frame for the function.
 			// The arguments are already on the stack in the correct position relative to the new frame's base pointer.
-			// The NewFrame function will copy the arguments into the new frame's locals array.
+			// The NewFrame function will copy the arguments into the frame's locals array.
 			newFrame := NewFrame(closure, basePointer) // NewFrame is defined in vm package
 
 			// Copy arguments from the stack into the new frame's locals.

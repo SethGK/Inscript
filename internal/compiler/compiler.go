@@ -31,7 +31,7 @@ type Compiler struct {
 
 // New creates a new top-level Compiler instance for a program.
 func New() *Compiler {
-	globalTable := NewSymbolTable() // Referring to NewSymbolTable (defined in symboltable.go, same package)
+	globalTable := NewSymbolTable() // Referring to NewSymbolTable (defined in symboltable.go, same package) - isFunctionScope is false
 
 	// The initial currentBytecode is for the program itself.
 	programBytecode := NewBytecode() // Referring to NewBytecode (defined in code.go, same package)
@@ -66,7 +66,8 @@ func (c *Compiler) NumGlobalVariables() int {
 func (c *Compiler) newFunctionCompiler() *Compiler {
 	// Create a new symbol table enclosed in the parent's *current* scope.
 	// This captures variables from outer scopes (for closures).
-	funcScope := NewEnclosedSymbolTable(c.currentScope) // Referring to NewEnclosedSymbolTable (defined in symboltable.go, same package)
+	// Pass true to indicate this is a function scope.
+	funcScope := NewEnclosedSymbolTable(c.currentScope, true) // Referring to NewEnclosedSymbolTable (defined in symboltable.go, same package)
 
 	// Each function has its own bytecode and constant pool.
 	funcBytecode := NewBytecode() // Referring to NewBytecode (defined in code.go, same package)
@@ -87,25 +88,20 @@ func (c *Compiler) newFunctionCompiler() *Compiler {
 
 // EnterScope pushes a new nested scope onto the stack.
 // isFunctionScope is true if entering a function body's scope.
+// This method is now primarily used for block scopes within the main program.
 func (c *Compiler) EnterScope(isFunctionScope bool) {
-	var newTable *SymbolTable // Referring to SymbolTable (defined in symboltable.go, same package)
+	// We only enter non-function scopes here (block scopes in main program).
+	// Function scopes are handled by newFunctionCompiler.
 	if isFunctionScope {
-		// Function scope is enclosed in the parent compiler's *current* scope.
-		// This is handled when newFunctionCompiler is called.
-		// This method should be called *after* creating the new function compiler
-		// and setting its initial scope.
-		// For the main compiler, this method is used for block scopes.
-		// panic("EnterScope(true) should not be called on the main compiler instance") // Re-enable this check if needed
-		// For block scopes:
-		newTable = NewEnclosedSymbolTable(c.currentScope) // Referring to NewEnclosedSymbolTable (defined in symboltable.go, same package)
-	} else {
-		// Block scope is enclosed in the current active scope.
-		newTable = NewEnclosedSymbolTable(c.currentScope) // Referring to NewEnclosedSymbolTable (defined in symboltable.go, same package)
+		panic("EnterScope(true) should not be called on the main compiler instance")
 	}
+
+	// Block scope is enclosed in the current active scope.
+	// Pass false to indicate this is NOT a function scope.
+	newTable := NewEnclosedSymbolTable(c.currentScope, false) // Referring to NewEnclosedSymbolTable (defined in symboltable.go, same package)
+
 	c.symbolTableStack = append(c.symbolTableStack, newTable)
 	c.currentScope = newTable
-	// Initialize the number of local variables for the new scope.
-	// This count will be incremented by DefineLocal.
 	// c.currentScope.numDefinitions is already initialized to 0 by NewEnclosedSymbolTable
 }
 
@@ -240,17 +236,16 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 			symbol, ok := c.currentScope.Resolve(target.Name)
 			if !ok {
 				// If the variable is not found in any scope, define it.
-				// If we are in the global scope, define it as a Global.
-				// If we are in a nested scope (block or function), define it as a Local.
-				if c.currentScope.Outer == nil { // Check if it's the global scope
-					// Define as Global in the main compiler's global table.
-					// This ensures the global count is updated correctly.
-					// Corrected call to Define: provide the SymbolKind.
-					symbol = c.globals.Define(target.Name, Global) // Pass name and Global kind
-				} else {
-					// Define as Local in the current scope.
+				// Variables defined in the main program (including nested blocks) are globals.
+				// Variables defined in function scopes are locals.
+				if c.currentScope.isFunctionScope {
+					// Define as Local in the current function scope.
 					// Corrected call to Define: provide the SymbolKind.
 					symbol = c.currentScope.Define(target.Name, Local) // Pass name and Local kind
+				} else {
+					// If not in a function scope (global or block in main program), define as Global.
+					// Corrected call to Define: provide the SymbolKind.
+					symbol = c.globals.Define(target.Name, Global) // Pass name and Global kind
 				}
 			}
 
@@ -261,6 +256,10 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 				c.emit(OpSetGlobal, symbol.Index) // Use OpSetGlobal
 			case Local, Parameter: // Parameters are also accessed as locals within the function frame (defined in symboltable.go, same package)
 				// Assign to a local variable or parameter. Operand is the local/parameter index within the frame.
+				// This case should ONLY be reached if compiling within a function scope.
+				if !c.currentScope.isFunctionScope {
+					return fmt.Errorf("internal compiler error: attempting to set local/parameter outside function scope for '%s'", symbol.Name)
+				}
 				// The operand for locals is 1 byte (uint8).
 				c.emit(OpSetLocal, symbol.Index) // Use OpSetLocal
 			case Builtin: // Referring to Builtin (defined in symboltable.go, same package)
@@ -341,9 +340,8 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		// Define parameters as local variables in the function's scope.
 		// Assuming ast.FuncDefStmt has a field like `Params []string`
 		for _, paramName := range stmt.Params {
-			// DefineLocal returns the symbol, we don't need it here, just need to register the parameter.
-			// Corrected call to Define: provide the SymbolKind (Parameter).
-			funcCompiler.DefineLocal(paramName) // DefineLocal internally calls Define with Local kind
+			// DefineLocal internally calls Define with Local kind and increments numDefinitions for the function scope.
+			funcCompiler.DefineLocal(paramName)
 		}
 
 		// Compile the function body.
@@ -443,13 +441,17 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 			return fmt.Errorf("undefined variable '%s'", expr.Name)
 		}
 
-		// Emit the appropriate instruction based on the symbol's kind.
+		// Emit the appropriate instruction based on the symbol's kind and scope.
 		switch symbol.Kind {
 		case Global: // Referring to Global (defined in symboltable.go, same package)
 			// Get value of a global variable. Operand is the global index.
 			c.emit(OpGetGlobal, symbol.Index) // Use OpGetGlobal
 		case Local, Parameter: // Parameters are also accessed as locals within the function frame (defined in symboltable.go, same package)
 			// Get value of a local variable or parameter. Operand is the local/parameter index.
+			// This case should ONLY be reached if compiling within a function scope.
+			if !c.currentScope.isFunctionScope {
+				return fmt.Errorf("internal compiler error: attempting to get local/parameter outside function scope for '%s'", symbol.Name)
+			}
 			// The operand for locals is 1 byte (uint8).
 			c.emit(OpGetLocal, symbol.Index) // Use OpGetLocal
 		case Builtin: // Referring to Builtin (defined in symboltable.go, same package)
@@ -651,7 +653,8 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 // compileBlockStmt compiles a block statement.
 func (c *Compiler) compileBlockStmt(block *ast.BlockStmt) error {
 	// Block statements introduce a new scope.
-	c.EnterScope(false) // false indicates it's not a function scope
+	// Pass false to indicate this is NOT a function scope.
+	c.EnterScope(false)
 
 	// Compile each statement in the block.
 	for _, stmt := range block.Stmts {
@@ -792,12 +795,24 @@ func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
 	// Get an iterator for the iterable.
 	c.emit(OpGetIterator) // Use OpGetIterator
 
-	// Enter a new scope for the loop variable.
-	c.EnterScope(false) // false indicates it's not a function scope
+	// Enter a new scope for the loop variable and loop body.
+	// This scope's function scope status is inherited from the outer scope.
+	c.EnterScope(c.currentScope.isFunctionScope) // Pass the function scope status of the outer scope
 
-	// Define the loop variable in the current scope.
-	// DefineLocal internally calls Define with Local kind.
-	iterVarSymbol := c.DefineLocal(stmt.Variable)
+	var loopVarSymbol *Symbol // Use Symbol from this package
+
+	// Define the loop variable in the current (loop's block) scope.
+	// The kind (Global or Local) depends on whether the outer scope is a function scope.
+	if c.currentScope.isFunctionScope {
+		// If the outer scope is a function scope, the loop variable is local to this function frame.
+		loopVarSymbol = c.DefineLocal(stmt.Variable) // Define as Local in the current (loop) scope
+	} else {
+		// If the outer scope is NOT a function scope (main program or block in main),
+		// the loop variable is a global variable.
+		// We define it in the global table, even though we are in a nested block scope.
+		// This flattens the variable into the global scope for the main program.
+		loopVarSymbol = c.globals.Define(stmt.Variable, Global) // Define as Global in the global table
+	}
 
 	// Mark the position for the loop's jump back (to get the next item).
 	loopStartPos := len(c.instructions) // Use c.instructions
@@ -809,8 +824,16 @@ func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
 	jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999) // Use OpJumpNotTruthy
 
 	// The next value is now on top of the stack. Assign it to the loop variable.
-	// The operand for locals is 1 byte (uint8).
-	c.emit(OpSetLocal, iterVarSymbol.Index) // Use OpSetLocal
+	// Use the correct opcode based on the loop variable's kind.
+	switch loopVarSymbol.Kind {
+	case Global:
+		c.emit(OpSetGlobal, loopVarSymbol.Index) // Use OpSetGlobal
+	case Local:
+		c.emit(OpSetLocal, loopVarSymbol.Index) // Use OpSetLocal
+	default:
+		// This should not happen based on the definition logic above.
+		return fmt.Errorf("internal compiler error: unexpected symbol kind for loop variable '%s' after definition: %v", stmt.Variable, loopVarSymbol.Kind)
+	}
 
 	// Compile the loop body.
 	if err := c.compileBlockStmt(stmt.Body); err != nil {
@@ -826,7 +849,7 @@ func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
 	afterLoopPos := len(c.instructions) // Use c.instructions
 	c.patchJump(jumpNotTruthyPos, afterLoopPos)
 
-	// Leave the scope for the loop variable.
+	// Leave the scope for the loop variable and loop body.
 	c.LeaveScope()
 
 	// The iterator is still on the stack after the loop finishes. Pop it.
