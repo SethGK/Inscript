@@ -514,39 +514,32 @@ func (vm *VM) Run() error {
 			// Push the return value onto the stack of the previous frame.
 			vm.push(returnValue)
 
-		case compiler.OpGetIterator: // Using compiler.OpGetIterator (from compiler package)
+		case compiler.OpGetIterator:
 			iterable := vm.pop()
-			iterator, err := iterable.GetIterator() // Call the GetIterator method on the value
+			it, err := iterable.GetIterator()
 			if err != nil {
-				// TODO: Handle runtime error
-				fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-				return err
+				return fmt.Errorf("runtime error: %v", err)
 			}
-			vm.push(iterator) // Push the iterator onto the stack
-			// ip already incremented by the loop
+			vm.push(it)
 
-		case compiler.OpIteratorNext: // Using compiler.OpIteratorNext (from compiler package)
+		case compiler.OpIteratorNext:
+			// Pop the iterator
 			iteratorVal := vm.pop()
-			iterator, ok := iteratorVal.(types.Iterator) // Expecting an Iterator from types package
+			iterator, ok := iteratorVal.(types.Iterator)
 			if !ok {
-				// TODO: Handle calling Next on non-iterator values
-				fmt.Fprintf(os.Stderr, "runtime error: cannot call Next on non-iterator value of type %s\n", iteratorVal.Type())
 				return fmt.Errorf("runtime error: cannot call Next on non-iterator value of type %s", iteratorVal.Type())
 			}
-			// Call the Next method on the iterator.
-			// It returns the next value, a boolean indicating if iteration is done, and an error.
-			value, done, err := iterator.Next()
-			if err != nil {
-				// TODO: Handle iteration error
-				fmt.Fprintf(os.Stderr, "runtime error: iteration error: %v\n", err)
-				return err
-			}
-			// Push the value and the boolean 'done' onto the stack.
-			// The compiler expects the boolean on top for OpJumpNotTruthy.
-			vm.push(value)
-			vm.push(&types.Boolean{Value: done}) // Push done as a boolean value
 
-			// ip already incremented by the loop
+			// Next() → (value, ok, err)
+			value, success, err := iterator.Next()
+			if err != nil {
+				return fmt.Errorf("runtime error: iteration error: %v", err)
+			}
+
+			// Push iterator back, then value and the success flag directly
+			vm.push(iteratorVal)
+			vm.push(value)
+			vm.push(&types.Boolean{Value: success})
 
 		default:
 			// TODO: Return a runtime error for unknown opcode
