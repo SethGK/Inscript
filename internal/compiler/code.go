@@ -49,6 +49,8 @@ const (
 
 	OpSetLocal // Pop value, set local variable (operand: local index within frame)
 	OpGetLocal // Get local variable, push value (operand: local index within frame)
+	OpGetFree
+	OpClosure
 
 	OpArray    // Create an array from stack elements (operand: number of elements)
 	OpHash     // Create a hash from stack key-value pairs (operand: number of pairs)
@@ -105,6 +107,9 @@ var definitions = map[OpCode]*Definition{
 
 	OpSetLocal: {"OpSetLocal", []int{1}}, // Local variable index (up to 255 locals per frame)
 	OpGetLocal: {"OpGetLocal", []int{1}}, // Local variable index
+
+	OpGetFree: {"OpGetFree", []int{1}},
+	OpClosure: {"OpClosure", []int{2, 1}},
 
 	OpArray:    {"OpArray", []int{2}}, // Number of elements (up to 65535)
 	OpHash:     {"OpHash", []int{2}},  // Number of key-value pairs

@@ -1,6 +1,7 @@
 // Code generated from grammar/Inscript.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
-package grammar // Inscript
+package parser // Inscript
+
 import (
 	"fmt"
 	"strconv"
@@ -55,7 +56,7 @@ func inscriptParserInit() {
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 41, 300, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 1, 41, 301, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
 		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 2, 10, 7,
 		10, 2, 11, 7, 11, 2, 12, 7, 12, 2, 13, 7, 13, 2, 14, 7, 14, 2, 15, 7, 15,
 		2, 16, 7, 16, 2, 17, 7, 17, 2, 18, 7, 18, 2, 19, 7, 19, 2, 20, 7, 20, 2,
@@ -82,41 +83,41 @@ func inscriptParserInit() {
 		235, 9, 29, 1, 30, 1, 30, 1, 30, 5, 30, 240, 8, 30, 10, 30, 12, 30, 243,
 		9, 30, 1, 31, 1, 31, 1, 31, 3, 31, 248, 8, 31, 1, 32, 1, 32, 1, 32, 1,
 		32, 1, 32, 1, 32, 1, 32, 1, 32, 1, 32, 5, 32, 259, 8, 32, 10, 32, 12, 32,
-		262, 9, 32, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 3,
-		33, 272, 8, 33, 1, 34, 1, 34, 1, 34, 1, 34, 1, 35, 1, 35, 1, 35, 1, 35,
-		1, 36, 1, 36, 3, 36, 284, 8, 36, 1, 37, 1, 37, 1, 37, 5, 37, 289, 8, 37,
-		10, 37, 12, 37, 292, 9, 37, 1, 38, 1, 38, 1, 38, 1, 38, 1, 39, 1, 39, 1,
-		39, 0, 0, 40, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
-		32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66,
-		68, 70, 72, 74, 76, 78, 0, 5, 1, 0, 18, 23, 1, 0, 24, 25, 1, 0, 26, 28,
-		2, 0, 24, 25, 30, 30, 2, 0, 33, 34, 36, 38, 291, 0, 80, 1, 0, 0, 0, 2,
-		84, 1, 0, 0, 0, 4, 90, 1, 0, 0, 0, 6, 96, 1, 0, 0, 0, 8, 98, 1, 0, 0, 0,
-		10, 102, 1, 0, 0, 0, 12, 104, 1, 0, 0, 0, 14, 109, 1, 0, 0, 0, 16, 116,
-		1, 0, 0, 0, 18, 118, 1, 0, 0, 0, 20, 126, 1, 0, 0, 0, 22, 129, 1, 0, 0,
-		0, 24, 133, 1, 0, 0, 0, 26, 140, 1, 0, 0, 0, 28, 142, 1, 0, 0, 0, 30, 146,
-		1, 0, 0, 0, 32, 152, 1, 0, 0, 0, 34, 158, 1, 0, 0, 0, 36, 164, 1, 0, 0,
-		0, 38, 168, 1, 0, 0, 0, 40, 172, 1, 0, 0, 0, 42, 174, 1, 0, 0, 0, 44, 184,
-		1, 0, 0, 0, 46, 186, 1, 0, 0, 0, 48, 194, 1, 0, 0, 0, 50, 196, 1, 0, 0,
-		0, 52, 204, 1, 0, 0, 0, 54, 212, 1, 0, 0, 0, 56, 220, 1, 0, 0, 0, 58, 228,
-		1, 0, 0, 0, 60, 236, 1, 0, 0, 0, 62, 247, 1, 0, 0, 0, 64, 249, 1, 0, 0,
-		0, 66, 271, 1, 0, 0, 0, 68, 273, 1, 0, 0, 0, 70, 277, 1, 0, 0, 0, 72, 283,
-		1, 0, 0, 0, 74, 285, 1, 0, 0, 0, 76, 293, 1, 0, 0, 0, 78, 297, 1, 0, 0,
-		0, 80, 81, 3, 2, 1, 0, 81, 82, 5, 0, 0, 1, 82, 1, 1, 0, 0, 0, 83, 85, 3,
-		4, 2, 0, 84, 83, 1, 0, 0, 0, 85, 86, 1, 0, 0, 0, 86, 84, 1, 0, 0, 0, 86,
-		87, 1, 0, 0, 0, 87, 3, 1, 0, 0, 0, 88, 91, 3, 6, 3, 0, 89, 91, 3, 16, 8,
-		0, 90, 88, 1, 0, 0, 0, 90, 89, 1, 0, 0, 0, 91, 5, 1, 0, 0, 0, 92, 97, 3,
-		8, 4, 0, 93, 97, 3, 10, 5, 0, 94, 97, 3, 12, 6, 0, 95, 97, 3, 14, 7, 0,
-		96, 92, 1, 0, 0, 0, 96, 93, 1, 0, 0, 0, 96, 94, 1, 0, 0, 0, 96, 95, 1,
-		0, 0, 0, 97, 7, 1, 0, 0, 0, 98, 99, 3, 64, 32, 0, 99, 100, 5, 1, 0, 0,
-		100, 101, 3, 48, 24, 0, 101, 9, 1, 0, 0, 0, 102, 103, 3, 48, 24, 0, 103,
-		11, 1, 0, 0, 0, 104, 105, 5, 2, 0, 0, 105, 106, 5, 3, 0, 0, 106, 107, 3,
-		40, 20, 0, 107, 108, 5, 4, 0, 0, 108, 13, 1, 0, 0, 0, 109, 110, 5, 5, 0,
-		0, 110, 111, 3, 38, 19, 0, 111, 15, 1, 0, 0, 0, 112, 117, 3, 18, 9, 0,
-		113, 117, 3, 28, 14, 0, 114, 117, 3, 30, 15, 0, 115, 117, 3, 32, 16, 0,
-		116, 112, 1, 0, 0, 0, 116, 113, 1, 0, 0, 0, 116, 114, 1, 0, 0, 0, 116,
-		115, 1, 0, 0, 0, 117, 17, 1, 0, 0, 0, 118, 119, 5, 6, 0, 0, 119, 120, 3,
-		48, 24, 0, 120, 121, 3, 34, 17, 0, 121, 122, 3, 20, 10, 0, 122, 123, 3,
-		26, 13, 0, 123, 19, 1, 0, 0, 0, 124, 127, 1, 0, 0, 0, 125, 127, 3, 22,
+		262, 9, 32, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1,
+		33, 3, 33, 273, 8, 33, 1, 34, 1, 34, 1, 34, 1, 34, 1, 35, 1, 35, 1, 35,
+		1, 35, 1, 36, 1, 36, 3, 36, 285, 8, 36, 1, 37, 1, 37, 1, 37, 5, 37, 290,
+		8, 37, 10, 37, 12, 37, 293, 9, 37, 1, 38, 1, 38, 1, 38, 1, 38, 1, 39, 1,
+		39, 1, 39, 0, 0, 40, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26,
+		28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62,
+		64, 66, 68, 70, 72, 74, 76, 78, 0, 5, 1, 0, 18, 23, 1, 0, 24, 25, 1, 0,
+		26, 28, 2, 0, 24, 25, 30, 30, 2, 0, 33, 34, 36, 38, 293, 0, 80, 1, 0, 0,
+		0, 2, 84, 1, 0, 0, 0, 4, 90, 1, 0, 0, 0, 6, 96, 1, 0, 0, 0, 8, 98, 1, 0,
+		0, 0, 10, 102, 1, 0, 0, 0, 12, 104, 1, 0, 0, 0, 14, 109, 1, 0, 0, 0, 16,
+		116, 1, 0, 0, 0, 18, 118, 1, 0, 0, 0, 20, 126, 1, 0, 0, 0, 22, 129, 1,
+		0, 0, 0, 24, 133, 1, 0, 0, 0, 26, 140, 1, 0, 0, 0, 28, 142, 1, 0, 0, 0,
+		30, 146, 1, 0, 0, 0, 32, 152, 1, 0, 0, 0, 34, 158, 1, 0, 0, 0, 36, 164,
+		1, 0, 0, 0, 38, 168, 1, 0, 0, 0, 40, 172, 1, 0, 0, 0, 42, 174, 1, 0, 0,
+		0, 44, 184, 1, 0, 0, 0, 46, 186, 1, 0, 0, 0, 48, 194, 1, 0, 0, 0, 50, 196,
+		1, 0, 0, 0, 52, 204, 1, 0, 0, 0, 54, 212, 1, 0, 0, 0, 56, 220, 1, 0, 0,
+		0, 58, 228, 1, 0, 0, 0, 60, 236, 1, 0, 0, 0, 62, 247, 1, 0, 0, 0, 64, 249,
+		1, 0, 0, 0, 66, 272, 1, 0, 0, 0, 68, 274, 1, 0, 0, 0, 70, 278, 1, 0, 0,
+		0, 72, 284, 1, 0, 0, 0, 74, 286, 1, 0, 0, 0, 76, 294, 1, 0, 0, 0, 78, 298,
+		1, 0, 0, 0, 80, 81, 3, 2, 1, 0, 81, 82, 5, 0, 0, 1, 82, 1, 1, 0, 0, 0,
+		83, 85, 3, 4, 2, 0, 84, 83, 1, 0, 0, 0, 85, 86, 1, 0, 0, 0, 86, 84, 1,
+		0, 0, 0, 86, 87, 1, 0, 0, 0, 87, 3, 1, 0, 0, 0, 88, 91, 3, 6, 3, 0, 89,
+		91, 3, 16, 8, 0, 90, 88, 1, 0, 0, 0, 90, 89, 1, 0, 0, 0, 91, 5, 1, 0, 0,
+		0, 92, 97, 3, 8, 4, 0, 93, 97, 3, 10, 5, 0, 94, 97, 3, 12, 6, 0, 95, 97,
+		3, 14, 7, 0, 96, 92, 1, 0, 0, 0, 96, 93, 1, 0, 0, 0, 96, 94, 1, 0, 0, 0,
+		96, 95, 1, 0, 0, 0, 97, 7, 1, 0, 0, 0, 98, 99, 3, 64, 32, 0, 99, 100, 5,
+		1, 0, 0, 100, 101, 3, 48, 24, 0, 101, 9, 1, 0, 0, 0, 102, 103, 3, 48, 24,
+		0, 103, 11, 1, 0, 0, 0, 104, 105, 5, 2, 0, 0, 105, 106, 5, 3, 0, 0, 106,
+		107, 3, 40, 20, 0, 107, 108, 5, 4, 0, 0, 108, 13, 1, 0, 0, 0, 109, 110,
+		5, 5, 0, 0, 110, 111, 3, 38, 19, 0, 111, 15, 1, 0, 0, 0, 112, 117, 3, 18,
+		9, 0, 113, 117, 3, 28, 14, 0, 114, 117, 3, 30, 15, 0, 115, 117, 3, 32,
+		16, 0, 116, 112, 1, 0, 0, 0, 116, 113, 1, 0, 0, 0, 116, 114, 1, 0, 0, 0,
+		116, 115, 1, 0, 0, 0, 117, 17, 1, 0, 0, 0, 118, 119, 5, 6, 0, 0, 119, 120,
+		3, 48, 24, 0, 120, 121, 3, 34, 17, 0, 121, 122, 3, 20, 10, 0, 122, 123,
+		3, 26, 13, 0, 123, 19, 1, 0, 0, 0, 124, 127, 1, 0, 0, 0, 125, 127, 3, 22,
 		11, 0, 126, 124, 1, 0, 0, 0, 126, 125, 1, 0, 0, 0, 127, 21, 1, 0, 0, 0,
 		128, 130, 3, 24, 12, 0, 129, 128, 1, 0, 0, 0, 130, 131, 1, 0, 0, 0, 131,
 		129, 1, 0, 0, 0, 131, 132, 1, 0, 0, 0, 132, 23, 1, 0, 0, 0, 133, 134, 5,
@@ -165,21 +166,22 @@ func inscriptParserInit() {
 		256, 3, 40, 20, 0, 256, 257, 5, 4, 0, 0, 257, 259, 1, 0, 0, 0, 258, 250,
 		1, 0, 0, 0, 258, 254, 1, 0, 0, 0, 259, 262, 1, 0, 0, 0, 260, 258, 1, 0,
 		0, 0, 260, 261, 1, 0, 0, 0, 261, 65, 1, 0, 0, 0, 262, 260, 1, 0, 0, 0,
-		263, 272, 3, 78, 39, 0, 264, 272, 5, 35, 0, 0, 265, 272, 3, 68, 34, 0,
-		266, 272, 3, 70, 35, 0, 267, 268, 5, 3, 0, 0, 268, 269, 3, 48, 24, 0, 269,
-		270, 5, 4, 0, 0, 270, 272, 1, 0, 0, 0, 271, 263, 1, 0, 0, 0, 271, 264,
-		1, 0, 0, 0, 271, 265, 1, 0, 0, 0, 271, 266, 1, 0, 0, 0, 271, 267, 1, 0,
-		0, 0, 272, 67, 1, 0, 0, 0, 273, 274, 5, 31, 0, 0, 274, 275, 3, 40, 20,
-		0, 275, 276, 5, 32, 0, 0, 276, 69, 1, 0, 0, 0, 277, 278, 5, 13, 0, 0, 278,
-		279, 3, 72, 36, 0, 279, 280, 5, 14, 0, 0, 280, 71, 1, 0, 0, 0, 281, 284,
-		1, 0, 0, 0, 282, 284, 3, 74, 37, 0, 283, 281, 1, 0, 0, 0, 283, 282, 1,
-		0, 0, 0, 284, 73, 1, 0, 0, 0, 285, 290, 3, 76, 38, 0, 286, 287, 5, 15,
-		0, 0, 287, 289, 3, 76, 38, 0, 288, 286, 1, 0, 0, 0, 289, 292, 1, 0, 0,
-		0, 290, 288, 1, 0, 0, 0, 290, 291, 1, 0, 0, 0, 291, 75, 1, 0, 0, 0, 292,
-		290, 1, 0, 0, 0, 293, 294, 5, 35, 0, 0, 294, 295, 5, 1, 0, 0, 295, 296,
-		3, 48, 24, 0, 296, 77, 1, 0, 0, 0, 297, 298, 7, 4, 0, 0, 298, 79, 1, 0,
-		0, 0, 25, 86, 90, 96, 116, 126, 131, 140, 164, 168, 172, 179, 184, 191,
-		201, 209, 217, 225, 233, 241, 247, 258, 260, 271, 283, 290,
+		263, 273, 3, 78, 39, 0, 264, 273, 5, 35, 0, 0, 265, 273, 3, 68, 34, 0,
+		266, 273, 3, 70, 35, 0, 267, 268, 5, 3, 0, 0, 268, 269, 3, 48, 24, 0, 269,
+		270, 5, 4, 0, 0, 270, 273, 1, 0, 0, 0, 271, 273, 3, 32, 16, 0, 272, 263,
+		1, 0, 0, 0, 272, 264, 1, 0, 0, 0, 272, 265, 1, 0, 0, 0, 272, 266, 1, 0,
+		0, 0, 272, 267, 1, 0, 0, 0, 272, 271, 1, 0, 0, 0, 273, 67, 1, 0, 0, 0,
+		274, 275, 5, 31, 0, 0, 275, 276, 3, 40, 20, 0, 276, 277, 5, 32, 0, 0, 277,
+		69, 1, 0, 0, 0, 278, 279, 5, 13, 0, 0, 279, 280, 3, 72, 36, 0, 280, 281,
+		5, 14, 0, 0, 281, 71, 1, 0, 0, 0, 282, 285, 1, 0, 0, 0, 283, 285, 3, 74,
+		37, 0, 284, 282, 1, 0, 0, 0, 284, 283, 1, 0, 0, 0, 285, 73, 1, 0, 0, 0,
+		286, 291, 3, 76, 38, 0, 287, 288, 5, 15, 0, 0, 288, 290, 3, 76, 38, 0,
+		289, 287, 1, 0, 0, 0, 290, 293, 1, 0, 0, 0, 291, 289, 1, 0, 0, 0, 291,
+		292, 1, 0, 0, 0, 292, 75, 1, 0, 0, 0, 293, 291, 1, 0, 0, 0, 294, 295, 5,
+		35, 0, 0, 295, 296, 5, 1, 0, 0, 296, 297, 3, 48, 24, 0, 297, 77, 1, 0,
+		0, 0, 298, 299, 7, 4, 0, 0, 299, 79, 1, 0, 0, 0, 25, 86, 90, 96, 116, 126,
+		131, 140, 164, 168, 172, 179, 184, 191, 201, 209, 217, 225, 233, 241, 247,
+		258, 260, 272, 284, 291,
 	}
 	deserializer := antlr.NewATNDeserializer(nil)
 	staticData.atn = deserializer.Deserialize(staticData.serializedATN)
@@ -708,23 +710,22 @@ func (p *InscriptParser) Statement() (localctx IStatementContext) {
 		goto errorExit
 	}
 
-	switch p.GetTokenStream().LA(1) {
-	case InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 1, p.GetParserRuleContext()) {
+	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
 			p.SetState(88)
 			p.SimpleStmt()
 		}
 
-	case InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11:
+	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(89)
 			p.CompoundStmt()
 		}
 
-	default:
-		p.SetError(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
+	case antlr.ATNInvalidAltNumber:
 		goto errorExit
 	}
 
@@ -3369,7 +3370,7 @@ func (p *InscriptParser) ExpressionListOpt() (localctx IExpressionListOptContext
 	case InscriptParserT__3, InscriptParserT__31:
 		p.EnterOuterAlt(localctx, 1)
 
-	case InscriptParserT__2, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+	case InscriptParserT__2, InscriptParserT__11, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(171)
@@ -5166,7 +5167,7 @@ func (p *InscriptParser) Unary() (localctx IUnaryContext) {
 			p.Unary()
 		}
 
-	case InscriptParserT__2, InscriptParserT__12, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+	case InscriptParserT__2, InscriptParserT__11, InscriptParserT__12, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(246)
@@ -5484,6 +5485,7 @@ type IAtomContext interface {
 	ListLiteral() IListLiteralContext
 	TableLiteral() ITableLiteralContext
 	Expression() IExpressionContext
+	FunctionDef() IFunctionDefContext
 
 	// IsAtomContext differentiates from other interfaces.
 	IsAtomContext()
@@ -5589,6 +5591,22 @@ func (s *AtomContext) Expression() IExpressionContext {
 	return t.(IExpressionContext)
 }
 
+func (s *AtomContext) FunctionDef() IFunctionDefContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IFunctionDefContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IFunctionDefContext)
+}
+
 func (s *AtomContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
@@ -5622,7 +5640,7 @@ func (s *AtomContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 func (p *InscriptParser) Atom() (localctx IAtomContext) {
 	localctx = NewAtomContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 66, InscriptParserRULE_atom)
-	p.SetState(271)
+	p.SetState(272)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -5682,6 +5700,13 @@ func (p *InscriptParser) Atom() (localctx IAtomContext) {
 				// Recognition error - abort rule
 				goto errorExit
 			}
+		}
+
+	case InscriptParserT__11:
+		p.EnterOuterAlt(localctx, 6)
+		{
+			p.SetState(271)
+			p.FunctionDef()
 		}
 
 	default:
@@ -5799,7 +5824,7 @@ func (p *InscriptParser) ListLiteral() (localctx IListLiteralContext) {
 	p.EnterRule(localctx, 68, InscriptParserRULE_listLiteral)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(273)
+		p.SetState(274)
 		p.Match(InscriptParserT__30)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -5807,11 +5832,11 @@ func (p *InscriptParser) ListLiteral() (localctx IListLiteralContext) {
 		}
 	}
 	{
-		p.SetState(274)
+		p.SetState(275)
 		p.ExpressionListOpt()
 	}
 	{
-		p.SetState(275)
+		p.SetState(276)
 		p.Match(InscriptParserT__31)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -5929,7 +5954,7 @@ func (p *InscriptParser) TableLiteral() (localctx ITableLiteralContext) {
 	p.EnterRule(localctx, 70, InscriptParserRULE_tableLiteral)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(277)
+		p.SetState(278)
 		p.Match(InscriptParserT__12)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -5937,11 +5962,11 @@ func (p *InscriptParser) TableLiteral() (localctx ITableLiteralContext) {
 		}
 	}
 	{
-		p.SetState(278)
+		p.SetState(279)
 		p.FieldListOpt()
 	}
 	{
-		p.SetState(279)
+		p.SetState(280)
 		p.Match(InscriptParserT__13)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -6057,7 +6082,7 @@ func (s *FieldListOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{}
 func (p *InscriptParser) FieldListOpt() (localctx IFieldListOptContext) {
 	localctx = NewFieldListOptContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 72, InscriptParserRULE_fieldListOpt)
-	p.SetState(283)
+	p.SetState(284)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -6070,7 +6095,7 @@ func (p *InscriptParser) FieldListOpt() (localctx IFieldListOptContext) {
 	case InscriptParserIDENTIFIER:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(282)
+			p.SetState(283)
 			p.FieldList()
 		}
 
@@ -6217,10 +6242,10 @@ func (p *InscriptParser) FieldList() (localctx IFieldListContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(285)
+		p.SetState(286)
 		p.Field()
 	}
-	p.SetState(290)
+	p.SetState(291)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -6229,7 +6254,7 @@ func (p *InscriptParser) FieldList() (localctx IFieldListContext) {
 
 	for _la == InscriptParserT__14 {
 		{
-			p.SetState(286)
+			p.SetState(287)
 			p.Match(InscriptParserT__14)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -6237,11 +6262,11 @@ func (p *InscriptParser) FieldList() (localctx IFieldListContext) {
 			}
 		}
 		{
-			p.SetState(287)
+			p.SetState(288)
 			p.Field()
 		}
 
-		p.SetState(292)
+		p.SetState(293)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -6364,7 +6389,7 @@ func (p *InscriptParser) Field() (localctx IFieldContext) {
 	p.EnterRule(localctx, 76, InscriptParserRULE_field)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(293)
+		p.SetState(294)
 		p.Match(InscriptParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -6372,7 +6397,7 @@ func (p *InscriptParser) Field() (localctx IFieldContext) {
 		}
 	}
 	{
-		p.SetState(294)
+		p.SetState(295)
 		p.Match(InscriptParserT__0)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -6380,7 +6405,7 @@ func (p *InscriptParser) Field() (localctx IFieldContext) {
 		}
 	}
 	{
-		p.SetState(295)
+		p.SetState(296)
 		p.Expression()
 	}
 
@@ -6499,7 +6524,7 @@ func (p *InscriptParser) Literal() (localctx ILiteralContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(297)
+		p.SetState(298)
 		_la = p.GetTokenStream().LA(1)
 
 		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&506806140928) != 0) {

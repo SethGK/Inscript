@@ -84,6 +84,7 @@ type IfStmt struct {
 	Else     *BlockStmt // may be nil
 	PosToken token.Pos
 }
+
 type ElseIf struct {
 	Cond     Expression
 	Body     *BlockStmt
@@ -114,7 +115,8 @@ type ForStmt struct {
 func (f *ForStmt) isStatement()   {}
 func (f *ForStmt) Pos() token.Pos { return f.PosToken }
 
-// FuncDefStmt represents `function(params) { body }`.
+// FuncDefStmt represents `function(params) { body }` when used as a statement (e.g., named function declaration).
+// Note: If your language only supports anonymous function literals assigned to variables, you might not need this.
 type FuncDefStmt struct {
 	Name     string // optional: empty for anonymous
 	Params   []string
@@ -234,6 +236,17 @@ type TableLiteral struct {
 
 func (t *TableLiteral) isExpression()  {}
 func (t *TableLiteral) Pos() token.Pos { return t.PosToken }
+
+// FunctionLiteral represents a function definition used as an expression: `function(params) { body }`.
+// This node implements the Expression interface.
+type FunctionLiteral struct {
+	Params   []string
+	Body     *BlockStmt
+	PosToken token.Pos
+}
+
+func (f *FunctionLiteral) isExpression()  {} // Implements Expression interface
+func (f *FunctionLiteral) Pos() token.Pos { return f.PosToken }
 
 // Field is a key/value pair in a table literal.
 type Field struct {

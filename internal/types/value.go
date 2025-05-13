@@ -1,4 +1,4 @@
-package types // New package for shared types
+package types
 
 import (
 	"fmt"
@@ -210,51 +210,91 @@ func (n *Nil) GetIterator() (Iterator, error)        { return nil, fmt.Errorf("n
 func (n *Nil) GetIndex(index Value) (Value, error)   { return nil, fmt.Errorf("nil is not indexable") }
 func (n *Nil) SetIndex(index Value, val Value) error { return fmt.Errorf("nil is not indexable") }
 
+// --- Updated CompiledFunction definition from first snippet ---
+
 // CompiledFunction value (represents the compiled code of a function)
 // Defined in the types package.
 type CompiledFunction struct {
 	Instructions  []byte // The bytecode for this function (using byte slice)
 	NumLocals     int    // Number of local variables (including parameters)
 	NumParameters int    // Number of parameters the function expects
-	// Free []Value // Free variables (for closures - TODO later)
+	FreeCount     int    // Number of free variables this function captures
 }
 
-func (cf *CompiledFunction) Type() Type              { return FUNCTION_OBJ }
-func (cf *CompiledFunction) Inspect() string         { return fmt.Sprintf("<function at %p>", cf) }
-func (cf *CompiledFunction) Equals(other Value) bool { return cf == other } // Identity equality for functions
+func (cf *CompiledFunction) Type() Type { return FUNCTION_OBJ }
+
+func (cf *CompiledFunction) Inspect() string {
+	// Using the Inspect from the first snippet, including FreeCount
+	return fmt.Sprintf("<function fn=%p free=%d>", cf, cf.FreeCount)
+}
+
+func (cf *CompiledFunction) Equals(other Value) bool {
+	// Using the Equals from the first snippet (identity comparison)
+	return cf == other
+}
+
 func (cf *CompiledFunction) Compare(other Value) (int, error) {
+	// Using the boilerplate from the second snippet as comparison isn't supported
 	return 0, fmt.Errorf("comparison not supported for Function")
 }
+
 func (cf *CompiledFunction) GetIterator() (Iterator, error) {
+	// Using the boilerplate from the second snippet as functions are not iterable
 	return nil, fmt.Errorf("function is not iterable")
 }
+
 func (cf *CompiledFunction) GetIndex(index Value) (Value, error) {
+	// Using the boilerplate from the second snippet as functions are not indexable
 	return nil, fmt.Errorf("function is not indexable")
 }
+
 func (cf *CompiledFunction) SetIndex(index Value, val Value) error {
+	// Using the boilerplate from the second snippet as functions are not indexable
 	return fmt.Errorf("function is not indexable")
 }
 
-// Closure value (represents a function instance with its environment)
+// --- Updated Closure definition from first snippet ---
+
+// Closure value (a function plus its captured variables)
 // Defined in the types package.
 type Closure struct {
-	Fn *CompiledFunction // The compiled function - Referring to CompiledFunction directly
-	// Free []Value // Free variables (for closures - TODO later)
+	Fn   *CompiledFunction // Underlying function bytecode
+	Free []Value           // Captured free variables
 }
 
-func (c *Closure) Type() Type              { return CLOSURE_OBJ }
-func (c *Closure) Inspect() string         { return fmt.Sprintf("<closure at %p>", c) }
-func (c *Closure) Equals(other Value) bool { return c == other } // Identity equality for closures
+func (c *Closure) Type() Type { return CLOSURE_OBJ }
+
+func (c *Closure) Inspect() string {
+	// Using the Inspect from the first snippet, including Free length
+	return fmt.Sprintf("<closure fn=%p free=%d>", c.Fn, len(c.Free))
+}
+
+func (c *Closure) Equals(other Value) bool {
+	// Using the Equals from the first snippet (identity comparison)
+	return c == other
+}
+
 func (c *Closure) Compare(other Value) (int, error) {
+	// Using the boilerplate from the second snippet as comparison isn't supported
 	return 0, fmt.Errorf("comparison not supported for Closure")
 }
-func (c *Closure) GetIterator() (Iterator, error) { return nil, fmt.Errorf("closure is not iterable") }
+
+func (c *Closure) GetIterator() (Iterator, error) {
+	// Using the boilerplate from the second snippet as closures are not iterable
+	return nil, fmt.Errorf("closure is not iterable")
+}
+
 func (c *Closure) GetIndex(index Value) (Value, error) {
+	// Using the boilerplate from the second snippet as closures are not indexable
 	return nil, fmt.Errorf("closure is not indexable")
 }
+
 func (c *Closure) SetIndex(index Value, val Value) error {
+	// Using the boilerplate from the second snippet as closures are not indexable
 	return fmt.Errorf("closure is not indexable")
 }
+
+// --- End of Updated definitions ---
 
 // List value
 type List struct { // Defined in the types package

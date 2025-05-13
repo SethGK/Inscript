@@ -1,6 +1,6 @@
 // Code generated from grammar/Inscript.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
-package grammar
+package parser
 
 import (
 	"fmt"

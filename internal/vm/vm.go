@@ -48,12 +48,10 @@ type Frame struct {
 func NewFrame(closure *types.Closure, basePointer int) *Frame {
 	// The number of locals needed for a frame is the number of parameters + declared local variables.
 	// This is stored in the CompiledFunction.NumLocals.
+	// The locals slice holds the parameters and declared local variables.
 	locals := make([]types.Value, closure.Fn.NumLocals)
 
-	// Copy arguments from the stack into the beginning of the locals slice.
-	// Arguments are on the stack right before the function object, starting at basePointer + 1.
-	// The number of arguments is closure.Fn.NumParameters.
-	// This copying is done in the VM's OpCall case, not here.
+	// Arguments are copied into the beginning of the locals slice in the VM's OpCall case.
 	// The NewFrame function just creates the frame structure with the correct locals slice size.
 
 	return &Frame{
@@ -75,11 +73,11 @@ func New(bytecode *compiler.Bytecode) *VM { // Takes *compiler.Bytecode
 	// The main program is treated as a function (the entry point).
 	// Create a CompiledFunction and a Closure for the main program's bytecode.
 	// These types are now in the types package.
-	mainFn := &types.CompiledFunction{Instructions: bytecode.Instructions, NumLocals: bytecode.NumLocals, NumParameters: bytecode.NumParameters}
+	// The main program's bytecode is the entry point. It has 0 parameters and locals.
+	mainFn := &types.CompiledFunction{Instructions: bytecode.Instructions, NumLocals: 0, NumParameters: 0} // NumLocals and NumParameters for main program should be 0
 	mainClosure := &types.Closure{Fn: mainFn}
 	// The base pointer for the main frame is 0, as it starts at the bottom of the stack.
-	// The main program's frame should have 0 locals, as variables are global.
-	mainFrame := NewFrame(mainClosure, 0) // NewFrame is defined in vm package. NumLocals for mainFn should be 0.
+	mainFrame := NewFrame(mainClosure, 0) // NewFrame is defined in vm package. basePointer is 0.
 
 	// Initialize the frames stack with the main frame.
 	frames := make([]*Frame, MaxFrames)
@@ -137,6 +135,14 @@ func (vm *VM) push(obj types.Value) { // Takes Value from types package
 		// TODO: Return a runtime error instead of panicking
 		panic("stack overflow")
 	}
+	// --- Debug Print: Push ---
+	// Get the current frame's base pointer for context
+	currentBasePtr := 0
+	if vm.framesIndex > 0 {
+		currentBasePtr = vm.currentFrame().basePointer
+	}
+	fmt.Printf("DEBUG (Push): Pushing %s at index %d (sp before: %d, basePtr: %d)\n", obj.Inspect(), vm.sp, vm.sp, currentBasePtr)
+	// --- End Debug Print ---
 	vm.stack[vm.sp] = obj
 	vm.sp++
 }
@@ -150,6 +156,14 @@ func (vm *VM) pop() types.Value { // Returning Value from types package
 	vm.sp--
 	obj := vm.stack[vm.sp]
 	vm.stack[vm.sp] = nil // Avoid memory leaks by clearing the reference
+	// --- Debug Print: Pop ---
+	// Get the current frame's base pointer for context
+	currentBasePtr := 0
+	if vm.framesIndex > 0 {
+		currentBasePtr = vm.currentFrame().basePointer
+	}
+	fmt.Printf("DEBUG (Pop): Popped %s from index %d (sp after: %d, basePtr: %d)\n", obj.Inspect(), vm.sp, vm.sp, currentBasePtr)
+	// --- End Debug Print ---
 	return obj
 }
 
@@ -176,9 +190,24 @@ func (vm *VM) Run() error {
 		// This case should ideally be handled by the compiler emitting an implicit return,
 		// but as a safeguard, we can pop the frame here.
 		if ip >= len(instructions) {
-			vm.popFrame() // Function finished, pop the frame
-			// If this was the last frame (main program), the loop condition will become false.
-			continue
+			// This should ideally not be reached if the compiler emits a final OpReturn/OpReturnValue
+			// However, as a safeguard:
+			// If the main frame finishes, the loop condition (vm.framesIndex > 0) will become false.
+			// If a function frame finishes without a return, it implicitly returns nil.
+			// Let's ensure an implicit nil return if we reach the end of function instructions.
+			if vm.framesIndex > 1 { // Not the main frame
+				// Implicit return nil
+				// The compiler should ideally push nil before the end of instructions if no explicit return.
+				// If it doesn't, we need to handle it here.
+				// Assuming compiler emits OpNull before the end if needed.
+				// Just execute the return logic.
+				frame := vm.popFrame()
+				vm.sp = frame.basePointer // Restore stack pointer
+				// The implicit nil return value should be at vm.stack[vm.sp] if compiler is correct.
+				continue // Continue loop to process the caller's next instruction
+			}
+			// If it's the main frame and we reached the end, the loop will terminate.
+			break // Exit the loop if main frame finishes
 		}
 
 		opcode := compiler.OpCode(instructions[ip]) // Using compiler.OpCode (from compiler package)
@@ -326,6 +355,7 @@ func (vm *VM) Run() error {
 			if int(localIndex) >= len(currentFrame.locals) {
 				return fmt.Errorf("runtime error: local variable index out of bounds: %d (max %d)", localIndex, len(currentFrame.locals)-1)
 			}
+			// Pop from the main stack and store in the frame's locals slice
 			currentFrame.locals[localIndex] = vm.pop()
 
 		case compiler.OpGetLocal: // Using compiler.OpGetLocal (from compiler package)
@@ -337,7 +367,40 @@ func (vm *VM) Run() error {
 			if int(localIndex) >= len(currentFrame.locals) {
 				return fmt.Errorf("runtime error: local variable index out of bounds: %d (max %d)", localIndex, len(currentFrame.locals)-1)
 			}
+			// Push from the frame's locals slice onto the main stack
 			vm.push(currentFrame.locals[localIndex])
+
+			// --- Closure support opcodes ---
+
+		case compiler.OpGetFree:
+			// Operand is a single-byte index into the current closure's Free slice
+			freeIndex := compiler.ReadUint8(instructions[ip+1:])
+			currentFrame.ip += 1
+			// Push the captured free variable onto the stack
+			vm.push(currentFrame.closure.Free[freeIndex])
+
+		case compiler.OpClosure:
+			// Operands: 2‑byte constant pool index, then 1‑byte free count
+			constIndex := compiler.ReadUint16(instructions[ip+1:])
+			freeCount := int(compiler.ReadUint8(instructions[ip+3:]))
+			currentFrame.ip += 3
+
+			// Look up the compiled function
+			fnVal := vm.constants[constIndex]
+			compiledFn, ok := fnVal.(*types.CompiledFunction)
+			if !ok {
+				return fmt.Errorf("runtime error: constant %d is not a CompiledFunction", constIndex)
+			}
+
+			// Pop freeCount values from the stack (in reverse order) to capture
+			frees := make([]types.Value, freeCount)
+			for i := freeCount - 1; i >= 0; i-- {
+				frees[i] = vm.pop()
+			}
+
+			// Build and push the closure
+			clo := &types.Closure{Fn: compiledFn, Free: frees}
+			vm.push(clo)
 
 		case compiler.OpArray: // Using compiler.OpArray (from compiler package)
 			numElements := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
@@ -385,7 +448,7 @@ func (vm *VM) Run() error {
 			vm.push(types.NewTable(orderedPairs)) // Use the NewTable helper
 
 		case compiler.OpIndex: // Using compiler.OpIndex (from compiler package)
-			// Stack top is [..., aggregate, index].
+			// Stack top is now [..., aggregate, index].
 			index := vm.pop()
 			aggregate := vm.pop()
 			// Call the GetIndex method on the aggregate value.
@@ -400,7 +463,7 @@ func (vm *VM) Run() error {
 			// ip already incremented by the loop
 
 		case compiler.OpSetIndex: // Using compiler.OpSetIndex (from compiler package)
-			// Stack top is [..., aggregate, index, value].
+			// Stack top is now [..., aggregate, index, value].
 			value := vm.pop()
 			index := vm.pop()
 			aggregate := vm.pop()
@@ -440,6 +503,15 @@ func (vm *VM) Run() error {
 			// ip will be incremented by the loop in the next iteration
 
 		case compiler.OpPrint: // Using compiler.OpPrint (from compiler package)
+			// --- Debug Print: At start of OpPrint ---
+			// Get the current frame's base pointer for context
+			currentBasePtr := 0
+			if vm.framesIndex > 0 {
+				currentBasePtr = vm.currentFrame().basePointer
+			}
+			fmt.Printf("DEBUG (OpPrint): Starting - Stack: %v, sp: %d, basePtr: %d\n", vm.stack[:vm.sp], vm.sp, currentBasePtr)
+			// --- End Debug Print ---
+
 			// Operand for print arguments count is 1 byte (uint8)
 			numArgs := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
 			currentFrame.ip += 1                               // Operand (1 byte for uint8)
@@ -457,6 +529,10 @@ func (vm *VM) Run() error {
 			// Operand for call arguments count is 1 byte (uint8)
 			numArgs := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
 			currentFrame.ip += 1                               // Operand (1 byte for uint8)
+
+			// --- Debug Print: Before OpCall setup ---
+			fmt.Printf("DEBUG (OpCall): Before setup - Stack: %v, sp: %d\n", vm.stack[:vm.sp], vm.sp)
+			// --- End Debug Print ---
 
 			// The function object is below the arguments on the stack.
 			// Stack: [..., function, arg1, arg2, ..., argN]
@@ -477,14 +553,21 @@ func (vm *VM) Run() error {
 			// Get the compiled function from the closure.
 			fn := closure.Fn // Fn is *types.CompiledFunction
 
+			// --- Debug Print: Called Function Instructions ---
+			fmt.Printf("DEBUG (OpCall): Called Function Instructions: %v\n", fn.Instructions)
+			// --- End Debug Print ---
+
 			if int(numArgs) != fn.NumParameters {
 				return fmt.Errorf("runtime error: wrong number of arguments: expected %d, got %d", fn.NumParameters, numArgs)
 			}
 
 			// Create a new call frame for the function.
-			// The arguments are already on the stack in the correct position relative to the new frame's base pointer.
-			// The NewFrame function will copy the arguments into the frame's locals array.
-			newFrame := NewFrame(closure, basePointer) // NewFrame is defined in vm package
+			// The base pointer for the new frame is the index on the main stack
+			// where this frame's locals and arguments begin.
+			// Since we copy arguments to a separate locals slice, this base pointer
+			// should point to the location where the function object *was* on the main stack.
+			// This space will be used for the new frame's temporary stack operations.
+			newFrame := NewFrame(closure, basePointer) // basePointer is correct here.
 
 			// Copy arguments from the stack into the new frame's locals.
 			// Arguments are located on the stack starting at basePointer + 1.
@@ -493,36 +576,82 @@ func (vm *VM) Run() error {
 				newFrame.locals[i] = vm.stack[basePointer+1+i]
 			}
 
+			// --- FIX: Reset and clear the main stack space used by the call setup ---
+			// Explicitly nil out the stack slots used by the function object and arguments.
+			// This is crucial to prevent the called function from seeing these old values.
+			for i := basePointer; i < vm.sp; i++ {
+				vm.stack[i] = nil
+			}
+			// Reset the main stack pointer to the basePointer. This makes the space
+			// from basePointer onwards available for the new frame's temporary stack operations.
+			vm.sp = basePointer
+
+			// --- Debug Print: After OpCall setup ---
+			fmt.Printf("DEBUG (OpCall): After setup - Stack: %v, sp: %d, basePtr: %d, locals: %v\n", vm.stack[:vm.sp], vm.sp, basePointer, newFrame.locals)
+			// --- End Debug Print ---
+
 			// Push the new frame onto the frame stack.
 			vm.pushFrame(newFrame)
 
 			// The VM will continue execution from the start of the new frame's instructions
 			// in the next iteration of the main loop.
-			// The stack pointer (vm.sp) remains where it is for now; the new frame
-			// will manage its locals relative to its base pointer.
+			// The stack pointer (vm.sp) has been adjusted correctly for the new frame.
 
 		case compiler.OpReturn: // Using compiler.OpReturn (from compiler package)
 			// This opcode is typically emitted by the compiler at the end of a function
 			// or for a `return` statement without a value.
-			// It implicitly returns nil.
+			// It implicitly returns nil. The compiler should push nil before OpReturn.
+
+			// --- Debug Print: Before OpReturn frame pop ---
+			// Get the current frame's base pointer for context
+			currentBasePtr := 0
+			if vm.framesIndex > 0 {
+				currentBasePtr = vm.currentFrame().basePointer
+			}
+			fmt.Printf("DEBUG (OpReturn): Before frame pop - Stack: %v, sp: %d, basePtr: %d\n", vm.stack[:vm.sp], vm.sp, currentBasePtr)
+			// --- End Debug Print ---
 
 			// Pop the current frame.
 			frame := vm.popFrame() // Referring to popFrame (defined below in vm package)
 
-			// The return value is implicitly null.
-			returnValue := &types.Nil{} // Referring to Nil from types package
+			// The return value (nil) should be on the stack, pushed by the compiler (OpNull).
+			// We don't pop it here, as it will be left on the stack for the caller.
 
 			// Restore the stack pointer to the state before the function call.
 			// This is the base pointer of the popped frame.
+			// The implicit nil return value should be at vm.stack[vm.sp] if compiler is correct.
 			vm.sp = frame.basePointer
 
-			// Push the return value onto the stack of the previous frame.
-			vm.push(returnValue)
+			// --- Debug Print: After stack restore ---
+			fmt.Printf("DEBUG (OpReturn): After stack restore - Stack: %v, sp: %d, frameBasePtr: %d\n", vm.stack[:vm.sp], vm.sp, frame.basePointer)
+			// --- End Debug Print ---
+
+			// Do NOT push nil here. The compiler is responsible for pushing the return value (nil).
+			// The value is already at vm.stack[frame.basePointer] if the compiler emitted OpNull before OpReturn.
 
 		case compiler.OpReturnValue: // Using compiler.OpReturnValue (from compiler package)
 			// This opcode is emitted by the compiler for a `return expression` statement.
 			// The return value is already on top of the stack.
-			returnValue := vm.pop()
+
+			// --- Debug Print: Before OpReturnValue pop ---
+			// Get the current frame's base pointer for context
+			currentBasePtr := 0
+			if vm.framesIndex > 0 {
+				currentBasePtr = vm.currentFrame().basePointer
+			}
+			fmt.Printf("DEBUG (OpReturnValue): Before pop - Stack: %v, sp: %d, basePtr: %d\n", vm.stack[:vm.sp], vm.sp, currentBasePtr)
+			// --- End Debug Print ---
+
+			returnValue := vm.pop() // Pop the return value from the current frame's stack
+
+			// --- Debug Print: After OpReturnValue pop, before frame pop ---
+			// Get the current frame's base pointer for context (before popFrame)
+			currentBasePtr = 0
+			if vm.framesIndex > 0 {
+				currentBasePtr = vm.currentFrame().basePointer
+			}
+			fmt.Printf("DEBUG (OpReturnValue): After pop - Stack: %v, sp: %d, basePtr: %d, retValue: %s\n", vm.stack[:vm.sp], vm.sp, currentBasePtr, returnValue.Inspect())
+			// --- End Debug Print ---
 
 			// Pop the current frame.
 			frame := vm.popFrame() // Referring to popFrame (defined below in vm package)
@@ -531,8 +660,16 @@ func (vm *VM) Run() error {
 			// This is the base pointer of the popped frame.
 			vm.sp = frame.basePointer
 
-			// Push the return value onto the stack of the previous frame.
+			// --- Debug Print: After stack restore, before push ---
+			fmt.Printf("DEBUG (OpReturnValue): After stack restore - Stack: %v, sp: %d, frameBasePtr: %d\n", vm.stack[:vm.sp], vm.sp, frame.basePointer)
+			// --- End Debug Print ---
+
+			// Push the return value onto the stack of the previous frame at the restored vm.sp.
 			vm.push(returnValue)
+
+			// --- Debug Print: After push ---
+			fmt.Printf("DEBUG (OpReturnValue): After push - Stack: %v, sp: %d\n", vm.stack[:vm.sp], vm.sp)
+			// --- End Debug Print ---
 
 		case compiler.OpGetIterator:
 			iterable := vm.pop()
@@ -617,52 +754,41 @@ func (vm *VM) add(left, right types.Value) types.Value { // Referring to Value f
 		default:
 			// Incompatible types for addition
 			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: float + %s\n", right.Type())
-			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil
 		}
 	case *types.String: // Referring to String from types package
+		// String concatenation
 		switch right := right.(type) {
 		case *types.Integer: // Referring to Integer from types package
-			// String concatenation
 			return &types.String{Value: fmt.Sprintf("%s%d", left.Value, right.Value)} // Referring to String from types package
 		case *types.Float: // Referring to Float from types package
-			// String concatenation
 			return &types.String{Value: fmt.Sprintf("%s%f", left.Value, right.Value)} // Referring to String from types package
 		case *types.String: // Referring to String from types package
-			// String concatenation
 			return &types.String{Value: left.Value + right.Value} // Referring to String from types package
+		case *types.Boolean: // Referring to Boolean from types package
+			return &types.String{Value: fmt.Sprintf("%s%t", left.Value, right.Value)} // Referring to String from types package
+		case *types.Nil: // Referring to Nil from types package
+			return &types.String{Value: left.Value + "nil"} // Referring to String from types package
 		default:
-			// Incompatible types for addition
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: string + %s\n", right.Type())
-			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+			// For other types, use their Inspect() representation
+			return &types.String{Value: left.Value + right.Inspect()} // Referring to String from types package
 		}
-	case *types.List: // Referring to List from types package
-		switch right := right.(type) {
-		case *types.List: // Referring to List from types package
-			// List concatenation
-			newList := make([]types.Value, len(left.Elements)+len(right.Elements))
-			copy(newList, left.Elements)
-			copy(newList[len(left.Elements):], right.Elements)
-			return &types.List{Elements: newList} // Referring to List from types package
-		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: list + %s\n", right.Type())
-			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
-		}
-
 	default:
-		// Unsupported type for addition
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for addition: %s\n", left.Type())
+		// Incompatible types for addition
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: %s + %s\n", left.Type(), right.Type())
 		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 	}
 }
 
-// subtract performs subtraction on two values.
-func (vm *VM) subtract(left, right types.Value) types.Value { // Ref
+// subtract performs subtraction.
+func (vm *VM) subtract(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform subtraction on nil values\n")
 		return &types.Nil{}
 	}
 
+	// Handle subtraction based on types
 	switch left := left.(type) {
 	case *types.Integer:
 		switch right := right.(type) {
@@ -685,19 +811,20 @@ func (vm *VM) subtract(left, right types.Value) types.Value { // Ref
 			return &types.Nil{}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for subtraction: %s\n", left.Type())
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: %s - %s\n", left.Type(), right.Type())
 		return &types.Nil{}
 	}
 }
 
-// multiply performs multiplication on two values.
-func (vm *VM) multiply(left, right types.Value) types.Value { // Ref
+// multiply performs multiplication.
+func (vm *VM) multiply(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform multiplication on nil values\n")
 		return &types.Nil{}
 	}
 
+	// Handle multiplication based on types
 	switch left := left.(type) {
 	case *types.Integer:
 		switch right := right.(type) {
@@ -720,33 +847,33 @@ func (vm *VM) multiply(left, right types.Value) types.Value { // Ref
 			return &types.Nil{}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for multiplication: %s\n", left.Type())
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: %s * %s\n", left.Type(), right.Type())
 		return &types.Nil{}
 	}
 }
 
-// divide performs division on two values.
-func (vm *VM) divide(left, right types.Value) types.Value { // Ref
+// divide performs division.
+func (vm *VM) divide(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform division on nil values\n")
 		return &types.Nil{}
 	}
 
+	// Handle division based on types
 	switch left := left.(type) {
 	case *types.Integer:
 		switch right := right.(type) {
 		case *types.Integer:
 			if right.Value == 0 {
 				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific error value
+				return &types.Nil{} // Or a specific Error type
 			}
-			// Integer division
 			return &types.Integer{Value: left.Value / right.Value}
 		case *types.Float:
 			if right.Value == 0.0 {
 				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific error value
+				return &types.Nil{} // Or a specific Error type
 			}
 			return &types.Float{Value: float64(left.Value) / right.Value}
 		default:
@@ -758,13 +885,13 @@ func (vm *VM) divide(left, right types.Value) types.Value { // Ref
 		case *types.Integer:
 			if right.Value == 0 {
 				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific error value
+				return &types.Nil{} // Or a specific Error type
 			}
 			return &types.Float{Value: left.Value / float64(right.Value)}
 		case *types.Float:
 			if right.Value == 0.0 {
 				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific error value
+				return &types.Nil{} // Or a specific Error type
 			}
 			return &types.Float{Value: left.Value / right.Value}
 		default:
@@ -772,75 +899,78 @@ func (vm *VM) divide(left, right types.Value) types.Value { // Ref
 			return &types.Nil{}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for division: %s\n", left.Type())
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: %s / %s\n", left.Type(), right.Type())
 		return &types.Nil{}
 	}
 }
 
-// modulo performs modulo on two values.
-func (vm *VM) modulo(left, right types.Value) types.Value { // Ref
+// modulo performs the modulo operation.
+func (vm *VM) modulo(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform modulo on nil values\n")
 		return &types.Nil{}
 	}
 
+	// Modulo is typically only defined for integers
 	leftInt, okLeft := left.(*types.Integer)
 	rightInt, okRight := right.(*types.Integer)
 
-	if okLeft && okRight {
-		if rightInt.Value == 0 {
-			fmt.Fprintf(os.Stderr, "runtime error: modulo by zero\n")
-			return &types.Nil{} // Or a specific error value
-		}
-		return &types.Integer{Value: leftInt.Value % rightInt.Value}
+	if !okLeft || !okRight {
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for modulo: %s %% %s\n", left.Type(), right.Type())
+		return &types.Nil{}
 	}
 
-	fmt.Fprintf(os.Stderr, "runtime error: unsupported types for modulo: %s %% %s\n", left.Type(), right.Type())
-	return &types.Nil{}
+	if rightInt.Value == 0 {
+		fmt.Fprintf(os.Stderr, "runtime error: modulo by zero\n")
+		return &types.Nil{} // Or a specific Error type
+	}
+
+	return &types.Integer{Value: leftInt.Value % rightInt.Value}
 }
 
-// power performs exponentiation on two values.
-func (vm *VM) power(left, right types.Value) types.Value { // Ref
+// power performs exponentiation.
+func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform power on nil values\n")
 		return &types.Nil{}
 	}
 
+	// Handle power based on types
 	switch left := left.(type) {
 	case *types.Integer:
 		switch right := right.(type) {
 		case *types.Integer:
 			// Integer power
-			return &types.Integer{Value: int64(math.Pow(float64(left.Value), float64(right.Value)))}
+			return &types.Float{Value: math.Pow(float64(left.Value), float64(right.Value))} // Result is float
 		case *types.Float:
-			// Float power
+			// Integer base, float exponent
 			return &types.Float{Value: math.Pow(float64(left.Value), right.Value)}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: integer ** %s\n", right.Type())
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: integer ^ %s\n", right.Type())
 			return &types.Nil{}
 		}
 	case *types.Float:
 		switch right := right.(type) {
 		case *types.Integer:
-			// Float power
+			// Float base, integer exponent
 			return &types.Float{Value: math.Pow(left.Value, float64(right.Value))}
 		case *types.Float:
 			// Float power
 			return &types.Float{Value: math.Pow(left.Value, right.Value)}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: float ** %s\n", right.Type())
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: float ^ %s\n", right.Type())
 			return &types.Nil{}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for power: %s\n", left.Type())
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: %s ^ %s\n", left.Type(), right.Type())
 		return &types.Nil{}
 	}
 }
 
-// negate performs negation on a value.
-func (vm *VM) negate(operand types.Value) types.Value { // Ref
+// negate performs unary negation.
+func (vm *VM) negate(operand types.Value) types.Value { // Referring to Value from types package
 	if operand == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot negate nil value\n")
 		return &types.Nil{}
@@ -852,95 +982,103 @@ func (vm *VM) negate(operand types.Value) types.Value { // Ref
 	case *types.Float:
 		return &types.Float{Value: -operand.Value}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for negation: %s\n", operand.Type())
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for negation: -%s\n", operand.Type())
 		return &types.Nil{}
 	}
 }
 
-// logicalNot performs logical NOT on a value.
-func (vm *VM) logicalNot(operand types.Value) types.Value { // Ref
-	// Nil, false, 0 (int and float), empty string, empty list, empty table are considered falsy.
-	// Everything else is truthy.
-	return &types.Boolean{Value: !isTruthy(operand)} // Ref
+// logicalNot performs logical negation.
+func (vm *VM) logicalNot(operand types.Value) types.Value { // Referring to Value from types package
+	// The isTruthy helper determines the boolean value of any type.
+	return &types.Boolean{Value: !isTruthy(operand)} // Referring to Boolean from types package
 }
 
-// isTruthy checks if a value is considered truthy.
-func isTruthy(obj types.Value) bool { // Ref
-	switch obj := obj.(type) {
-	case *types.Boolean:
-		return obj.Value
-	case *types.Nil:
-		return false
-	case *types.Integer:
-		return obj.Value != 0
-	case *types.Float:
-		return obj.Value != 0.0
-	case *types.String:
-		return obj.Value != ""
-	case *types.List:
-		return len(obj.Elements) > 0
-	case *types.Table:
-		// Check if the table has any pairs (keys)
-		return len(obj.Pairs) > 0 // Check the Pairs slice length
-	default:
-		// Other types are considered truthy by default (e.g., functions, closures)
-		return true
-	}
-}
-
-// equal checks for equality between two values.
-func (vm *VM) equal(left, right types.Value) types.Value { // Ref
+// equal checks for equality.
+func (vm *VM) equal(left, right types.Value) types.Value { // Referring to Value from types package
 	// Use the Equals method defined on the Value interface.
 	// This allows each type to define its own equality logic.
-	return &types.Boolean{Value: left.Equals(right)} // Ref
+	return &types.Boolean{Value: left.Equals(right)} // Referring to Boolean from types package
 }
 
-// notEqual checks for inequality between two values.
-func (vm *VM) notEqual(left, right types.Value) types.Value { // Ref
+// notEqual checks for inequality.
+func (vm *VM) notEqual(left, right types.Value) types.Value { // Referring to Value from types package
 	// Use the Equals method and negate the result.
-	return &types.Boolean{Value: !left.Equals(right)} // Ref
+	return &types.Boolean{Value: !left.Equals(right)} // Referring to Boolean from types package
 }
 
-// greaterThan checks if the left value is greater than the right value.
-func (vm *VM) greaterThan(left, right types.Value) types.Value { // Ref
+// greaterThan checks if left > right.
+func (vm *VM) greaterThan(left, right types.Value) types.Value { // Referring to Value from types package
+	// Use the Compare method defined on the Value interface.
+	cmp, err := left.Compare(right)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
+		return &types.Nil{} // Or a specific Error type
+	}
+	return &types.Boolean{Value: cmp > 0} // Referring to Boolean from types package
+}
+
+// lessThan checks if left < right.
+func (vm *VM) lessThan(left, right types.Value) types.Value { // Referring to Value from types package
 	// Use the Compare method.
 	cmp, err := left.Compare(right)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific error value
+		return &types.Nil{} // Or a specific Error type
 	}
-	return &types.Boolean{Value: cmp > 0} // Ref
+	return &types.Boolean{Value: cmp < 0} // Referring to Boolean from types package
 }
 
-// lessThan checks if the left value is less than the right value.
-func (vm *VM) lessThan(left, right types.Value) types.Value { // Ref
+// greaterEqual checks if left >= right.
+func (vm *VM) greaterEqual(left, right types.Value) types.Value { // Referring to Value from types package
 	// Use the Compare method.
 	cmp, err := left.Compare(right)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific error value
+		return &types.Nil{} // Or a specific Error type
 	}
-	return &types.Boolean{Value: cmp < 0} // Ref
+	return &types.Boolean{Value: cmp >= 0} // Referring to Boolean from types package
 }
 
-// greaterEqual checks if the left value is greater than or equal to the right value.
-func (vm *VM) greaterEqual(left, right types.Value) types.Value { // Ref
+// lessEqual checks if left <= right.
+func (vm *VM) lessEqual(left, right types.Value) types.Value { // Referring to Value from types package
 	// Use the Compare method.
 	cmp, err := left.Compare(right)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific error value
+		return &types.Nil{} // Or a specific Error type
 	}
-	return &types.Boolean{Value: cmp >= 0} // Ref
+	return &types.Boolean{Value: cmp <= 0} // Referring to Boolean from types package
 }
 
-// lessEqual checks if the left value is less than or equal to the right value.
-func (vm *VM) lessEqual(left, right types.Value) types.Value { // Ref
-	// Use the Compare method.
-	cmp, err := left.Compare(right)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific error value
+// isTruthy determines the boolean value of any value.
+func isTruthy(obj types.Value) bool { // Referring to Value from types package
+	if obj == nil {
+		return false
 	}
-	return &types.Boolean{Value: cmp <= 0} // Ref
+	switch obj := obj.(type) {
+	case *types.Boolean: // Referring to Boolean from types package
+		return obj.Value
+	case *types.Nil: // Referring to Nil from types package
+		return false
+	case *types.Integer: // Referring to Integer from types package
+		return obj.Value != 0
+	case *types.Float: // Referring to Float from types package
+		return obj.Value != 0.0 // Consider NaN/Inf handling if needed
+	case *types.String: // Referring to String from types package
+		return obj.Value != ""
+	case *types.List: // Referring to List from types package
+		return len(obj.Elements) > 0
+	case *types.Table: // Referring to Table from types package
+		return len(obj.Pairs) > 0 // Check number of pairs
+	// FIX: Change the type switch case from *types.Iterator to the concrete types that implement it.
+	case *types.StringIterator, *types.ListIterator, *types.TableIterator: // Iterators are generally truthy if they are not exhausted (though this check doesn't verify exhaustion)
+		return true
+	case *types.CompiledFunction, *types.Closure: // Functions, Closures are generally truthy
+		return true
+	case *types.Error: // Errors are generally falsy
+		return false
+	default:
+		// Unknown types are considered falsy by default
+		return false
+	}
 }

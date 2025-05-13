@@ -1,6 +1,7 @@
 // Code generated from grammar/Inscript.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
-package grammar // Inscript
+package parser // Inscript
+
 import "github.com/antlr4-go/antlr/v4"
 
 type BaseInscriptVisitor struct {

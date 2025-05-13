@@ -60,6 +60,7 @@ atom                : literal
                     | listLiteral
                     | tableLiteral
                     | '(' expression ')'
+                    | functionDef
                     ;
 
 listLiteral         : '[' expressionListOpt ']';

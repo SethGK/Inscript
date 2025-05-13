@@ -4,37 +4,43 @@ package compiler
 import (
 	"encoding/binary" // Needed for binary encoding/decoding in patchJump
 	"fmt"
-	"os" // Needed for Fprintf to stderr
 
+	// Needed for Fprintf to stderr
 	"github.com/SethGK/Inscript/internal/ast"
 	"github.com/SethGK/Inscript/internal/types"
+	// Assuming SymbolTable, Symbol, SymbolKind, NewSymbolTable, NewEnclosedSymbolTable
+	// are defined in symboltable.go in the same package.
+	// Assuming Instructions, Bytecode, NewBytecode, OpCode, Definition, Make, Lookup, GetLastOpcode
+	// are defined in code.go in the same package.
+	// Note: The import path for the generated parser package should be correct.
+	// parser "github.com/SethGK/Inscript/parser/grammar"
 )
 
 // Compiler translates an AST into bytecode.
 type Compiler struct {
 	// The bytecode being compiled for the current compilation unit (program or function)
-	instructions Instructions  // Use Instructions type from this package
+	instructions Instructions  // Use Instructions type from code.go
 	constants    []types.Value // Constant pool for the current compilation unit - Referring to types.Value
 
 	// Global symbol table (unique for the entire program)
 	// This is shared across all function compilers.
-	globals *SymbolTable // Referring to SymbolTable (defined in symboltable.go, same package)
+	globals *SymbolTable // Referring to SymbolTable from symboltable.go
 	// Removed numGlobals field - the count is now in c.globals.numDefinitions
 
 	// Scope management
-	symbolTableStack []*SymbolTable // Referring to SymbolTable (defined in symboltable.go, same package)
-	currentScope     *SymbolTable   // Referring to SymbolTable (defined in symboltable.go, same package)
+	symbolTableStack []*SymbolTable // Referring to SymbolTable from symboltable.go
+	currentScope     *SymbolTable   // Referring to SymbolTable from symboltable.go
 
 	// Bytecode buffer for the current compilation unit
-	currentBytecode *Bytecode // Use Bytecode type from this package
+	currentBytecode *Bytecode // Use Bytecode type from code.go
 }
 
 // New creates a new top-level Compiler instance for a program.
 func New() *Compiler {
-	globalTable := NewSymbolTable() // Referring to NewSymbolTable (defined in symboltable.go, same package) - isFunctionScope is false
+	globalTable := NewSymbolTable() // Referring to NewSymbolTable from symboltable.go - isFunctionScope is false
 
 	// The initial currentBytecode is for the program itself.
-	programBytecode := NewBytecode() // Referring to NewBytecode (defined in code.go, same package)
+	programBytecode := NewBytecode() // Referring to NewBytecode from code.go
 
 	c := &Compiler{
 		instructions: programBytecode.Instructions, // Start with the program's instruction slice ([]byte)
@@ -49,7 +55,7 @@ func New() *Compiler {
 	// Pre-define builtins if any (e.g., "print" could be a builtin function)
 	// For now, let's assume print is handled by OpPrint directly and not a callable builtin.
 	// If you add builtins, define them in the global table here:
-	// c.DefineGlobal("print", Builtin) // Example - Referring to Builtin (defined in symboltable.go, same package)
+	// c.DefineGlobal("print", Builtin) // Example - Referring to Builtin from symboltable.go
 
 	return c
 }
@@ -67,21 +73,19 @@ func (c *Compiler) newFunctionCompiler() *Compiler {
 	// Create a new symbol table enclosed in the parent's *current* scope.
 	// This captures variables from outer scopes (for closures).
 	// Pass true to indicate this is a function scope.
-	funcScope := NewEnclosedSymbolTable(c.currentScope, true) // Referring to NewEnclosedSymbolTable (defined in symboltable.go, same package)
+	funcScope := NewEnclosedSymbolTable(c.currentScope, true) // Referring to NewEnclosedSymbolTable from symboltable.go
 
 	// Each function has its own bytecode and constant pool.
-	funcBytecode := NewBytecode() // Referring to NewBytecode (defined in code.go, same package)
-
-	// Create a new compiler instance for this function's body.
-	// It shares the global symbol table and uses its numDefinitions for global count.
+	// Functions share the *main* compiler's constant pool.
+	// The function compiler's constants slice is a reference to the main compiler's constants.
 	funcComp := &Compiler{
-		instructions: funcBytecode.Instructions, // Start with the function's instruction slice ([]byte)
-		constants:    funcBytecode.Constants,    // Start with the function's constant slice ([]types.Value)
-		globals:      c.globals,                 // Share the global table
-		// numGlobals field removed
+		instructions:     make(Instructions, 0),     // Start with an empty instruction slice for the function body
+		constants:        c.constants,               // Reference the main compiler's constant pool
+		globals:          c.globals,                 // Share the global table
 		symbolTableStack: []*SymbolTable{funcScope}, // Stack starts with function scope
 		currentScope:     funcScope,
-		currentBytecode:  funcBytecode, // Compiling this function's body
+		// currentBytecode is not used in the function compiler instance itself,
+		// its bytecode is built into funcComp.instructions and funcComp.constants
 	}
 	return funcComp
 }
@@ -92,13 +96,20 @@ func (c *Compiler) newFunctionCompiler() *Compiler {
 func (c *Compiler) EnterScope(isFunctionScope bool) {
 	// We only enter non-function scopes here (block scopes in main program).
 	// Function scopes are handled by newFunctionCompiler.
-	if isFunctionScope {
-		panic("EnterScope(true) should not be called on the main compiler instance")
+	if isFunctionScope && !c.currentScope.isFunctionScope {
+		// Only allow entering a function scope if the current scope is not already one.
+		// This prevents accidentally nesting function scopes using EnterScope.
+		panic("EnterScope(true) should only be called when entering a function's top-level scope")
+	}
+	if isFunctionScope && c.currentScope.isFunctionScope {
+		// If already in a function scope, entering another function scope is nested,
+		// which is handled by newFunctionCompiler, not EnterScope.
+		panic("EnterScope(true) should not be called on a compiler instance already in a function scope")
 	}
 
 	// Block scope is enclosed in the current active scope.
 	// Pass false to indicate this is NOT a function scope.
-	newTable := NewEnclosedSymbolTable(c.currentScope, false) // Referring to NewEnclosedSymbolTable (defined in symboltable.go, same package)
+	newTable := NewEnclosedSymbolTable(c.currentScope, false) // Referring to NewEnclosedSymbolTable from symboltable.go
 
 	c.symbolTableStack = append(c.symbolTableStack, newTable)
 	c.currentScope = newTable
@@ -134,7 +145,7 @@ func (c *Compiler) LeaveScope() {
 // DefineGlobal defines a symbol in the top-level global symbol table.
 // Returns the created Symbol.
 // This now increments the global symbol table's definition count.
-func (c *Compiler) DefineGlobal(name string, kind SymbolKind) *Symbol { // Referring to SymbolKind, Symbol (defined in symboltable.go, same package)
+func (c *Compiler) DefineGlobal(name string, kind SymbolKind) *Symbol { // Referring to SymbolKind, Symbol from symboltable.go
 	// Check if it already exists in the global table
 	symbol, ok := c.globals.store[name]
 	if ok {
@@ -145,7 +156,7 @@ func (c *Compiler) DefineGlobal(name string, kind SymbolKind) *Symbol { // Refer
 
 	// Define a new global symbol
 	// The index is the current number of definitions in the global table.
-	symbol = &Symbol{Name: name, Kind: kind, Index: c.globals.numDefinitions} // Referring to Symbol (defined in symboltable.go, same package)
+	symbol = &Symbol{Name: name, Kind: kind, Index: c.globals.numDefinitions} // Referring to Symbol from symboltable.go
 	c.globals.store[name] = symbol
 	c.globals.numDefinitions++ // Manually increment here since we are not using the SymbolTable.Define method directly for globals in this helper
 	return symbol
@@ -153,7 +164,7 @@ func (c *Compiler) DefineGlobal(name string, kind SymbolKind) *Symbol { // Refer
 
 // DefineLocal defines a symbol in the current scope's symbol table.
 // Returns the created Symbol.
-func (c *Compiler) DefineLocal(name string) *Symbol { // Referring to Symbol (defined in symboltable.go, same package)
+func (c *Compiler) DefineLocal(name string) *Symbol { // Referring to Symbol from symboltable.go
 	// Check if the symbol is already defined in the current scope.
 	// This prevents re-declaring variables in the same scope (if language rules require this).
 	// For now, we allow shadowing outer scopes but not re-declaration in the same scope.
@@ -167,7 +178,7 @@ func (c *Compiler) DefineLocal(name string) *Symbol { // Referring to Symbol (de
 
 	// Define a new local symbol in the current scope.
 	// The index is the current number of definitions in this scope.
-	symbol := &Symbol{Name: name, Kind: Local, Index: c.currentScope.numDefinitions} // Referring to Symbol, Local (defined in symboltable.go, same package)
+	symbol := &Symbol{Name: name, Kind: Local, Index: c.currentScope.numDefinitions} // Referring to Symbol, Local from symboltable.go
 	c.currentScope.store[name] = symbol
 	c.currentScope.numDefinitions++ // Manually increment here since we are not using the SymbolTable.Define method directly for locals in this helper
 	return symbol
@@ -175,7 +186,7 @@ func (c *Compiler) DefineLocal(name string) *Symbol { // Referring to Symbol (de
 
 // Compile compiles the AST program into bytecode.
 // This method is called on the top-level Compiler instance.
-func (c *Compiler) Compile(program *ast.Program) (*Bytecode, error) { // Returning *Bytecode
+func (c *Compiler) Compile(program *ast.Program) (*Bytecode, error) { // Returning *Bytecode from code.go
 	// The compiler is already initialized with the global scope and program bytecode.
 
 	// compile all top-level statements
@@ -193,8 +204,8 @@ func (c *Compiler) Compile(program *ast.Program) (*Bytecode, error) { // Returni
 
 	// Implicit return null at the end of the program execution.
 	// This ensures the VM doesn't run off the end of instructions.
-	c.emit(OpNull)   // Use OpNull
-	c.emit(OpReturn) // Use OpReturn
+	c.emit(OpNull)   // Use OpNull from code.go
+	c.emit(OpReturn) // Use OpReturn from code.go
 
 	// Finalize the program's bytecode object.
 	// The instructions and constants are already in c.instructions and c.constants.
@@ -213,14 +224,22 @@ func (c *Compiler) Compile(program *ast.Program) (*Bytecode, error) { // Returni
 
 // compileStatement emits bytecode for a statement node.
 func (c *Compiler) compileStatement(s ast.Statement) error {
+	// --- Debug Print: Compiling Statement ---
+	fmt.Printf("DEBUG (Compiler): Compiling Statement type %T\n", s)
+	// --- End Debug Print ---
+
 	switch stmt := s.(type) {
 	case *ast.ExprStmt:
 		// Compile the expression. It leaves its result on the stack.
+		// --- Debug Print: Compiling ExprStmt expression ---
+		fmt.Printf("DEBUG (Compiler): Compiling ExprStmt expression type %T\n", stmt.Expr)
+		// --- End Debug Print ---
 		if err := c.compileExpression(stmt.Expr); err != nil {
 			return err
 		}
-		// For an expression statement, the result is not used, so pop it.
-		c.emit(OpPop) // Use OpPop
+		// For a standalone expression statement, the result is not used, so pop it.
+		// This OpPop is necessary for expressions used as statements (e.g., `1 + 2;`).
+		c.emit(OpPop) // Use OpPop from code.go
 
 	case *ast.AssignStmt:
 		// Handle the assignment target based on its type.
@@ -228,9 +247,18 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		case *ast.Identifier:
 			// Assignment to a variable (identifier).
 			// Compile the value expression first. It leaves the value on the stack.
+			// --- Debug Print: Compiling AssignStmt value for target '%s' ---
+			fmt.Printf("DEBUG (Compiler): Compiling AssignStmt value for target '%s' (type %T)\n", target.Name, stmt.Value)
+			// --- End Debug Print ---
+			// --- Debug Print: Before compileExpression for AssignStmt value ---
+			fmt.Printf("DEBUG (Compiler): Before compileExpression for AssignStmt value. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
 			if err := c.compileExpression(stmt.Value); err != nil {
 				return err
 			}
+			// --- Debug Print: After compileExpression for AssignStmt value ---
+			fmt.Printf("DEBUG (Compiler): After compileExpression for AssignStmt value. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
 
 			// Look up the symbol in the current and outer scopes.
 			symbol, ok := c.currentScope.Resolve(target.Name)
@@ -241,28 +269,29 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 				if c.currentScope.isFunctionScope {
 					// Define as Local in the current function scope.
 					// Corrected call to Define: provide the SymbolKind.
-					symbol = c.currentScope.Define(target.Name, Local) // Pass name and Local kind
+					symbol = c.currentScope.Define(target.Name, Local) // Pass name and Local kind from symboltable.go
 				} else {
 					// If not in a function scope (global or block in main program), define as Global.
 					// Corrected call to Define: provide the SymbolKind.
-					symbol = c.globals.Define(target.Name, Global) // Pass name and Global kind
+					symbol = c.globals.Define(target.Name, Global) // Pass name and Global kind from symboltable.go
 				}
 			}
 
 			// Emit the appropriate instruction based on the symbol's kind.
+			// OpSetGlobal and OpSetLocal consume the value from the stack.
 			switch symbol.Kind {
-			case Global: // Referring to Global (defined in symboltable.go, same package)
+			case Global: // Referring to Global from symboltable.go
 				// Assign to a global variable. Operand is the global index.
-				c.emit(OpSetGlobal, symbol.Index) // Use OpSetGlobal
-			case Local, Parameter: // Parameters are also accessed as locals within the function frame (defined in symboltable.go, same package)
+				c.emit(OpSetGlobal, symbol.Index) // Use OpSetGlobal from code.go
+			case Local, Parameter: // Parameters are also accessed as locals within the function frame from symboltable.go
 				// Assign to a local variable or parameter. Operand is the local/parameter index within the frame.
 				// This case should ONLY be reached if compiling within a function scope.
 				if !c.currentScope.isFunctionScope {
 					return fmt.Errorf("internal compiler error: attempting to set local/parameter outside function scope for '%s'", symbol.Name)
 				}
 				// The operand for locals is 1 byte (uint8).
-				c.emit(OpSetLocal, symbol.Index) // Use OpSetLocal
-			case Builtin: // Referring to Builtin (defined in symboltable.go, same package)
+				c.emit(OpSetLocal, symbol.Index) // Use OpSetLocal from code.go
+			case Builtin: // Referring to Builtin from symboltable.go
 				// Cannot assign to a builtin.
 				return fmt.Errorf("cannot assign to builtin '%s'", symbol.Name)
 			default:
@@ -287,13 +316,22 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 
 			// 3. Compile the value expression (the value to be assigned).
 			// This pushes the value onto the stack.
+			// --- Debug Print: Compiling AssignStmt IndexExpr value ---
+			fmt.Printf("DEBUG (Compiler): Compiling AssignStmt IndexExpr value (type %T)\n", stmt.Value)
+			// --- End Debug Print ---
+			// --- Debug Print: Before compileExpression for AssignStmt IndexExpr value ---
+			fmt.Printf("DEBUG (Compiler): Before compileExpression for AssignStmt IndexExpr value. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
 			if err := c.compileExpression(stmt.Value); err != nil { // Compile stmt.Value LAST
 				return err
 			}
+			// --- Debug Print: After compileExpression for AssignStmt IndexExpr value ---
+			fmt.Printf("DEBUG (Compiler): After compileExpression for AssignStmt IndexExpr value. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
 
 			// Stack top is now [..., aggregate, index, value]. Correct order for OpSetIndex.
 			// Emit OpSetIndex. The VM should pop value, index, aggregate, and perform the assignment.
-			c.emit(OpSetIndex) // Use OpSetIndex
+			c.emit(OpSetIndex) // Use OpSetIndex from code.go
 
 		// Add cases for other potential assignment targets if your grammar supports them,
 		// e.g., field access like `my_object.field = value`.
@@ -305,24 +343,46 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 	case *ast.PrintStmt:
 		// Compile each expression to be printed. They leave their results on the stack.
 		for _, e := range stmt.Exprs {
+			// --- Debug Print: Compiling PrintStmt expression ---
+			fmt.Printf("DEBUG (Compiler): Compiling PrintStmt expression (type %T)\n", e)
+			// --- End Debug Print ---
+			// --- Debug Print: Before compileExpression for PrintStmt expression ---
+			fmt.Printf("DEBUG (Compiler): Before compileExpression for PrintStmt expression. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
 			if err := c.compileExpression(e); err != nil {
 				return err
 			}
+			// --- Debug Print: After compileExpression for PrintStmt expression ---
+			fmt.Printf("DEBUG (Compiler): After compileExpression for PrintStmt expression. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
 		}
 		// Emit the print instruction with the number of arguments to print.
-		c.emit(OpPrint, len(stmt.Exprs)) // Use OpPrint
+		c.emit(OpPrint, len(stmt.Exprs)) // Use OpPrint from code.go
 
 	case *ast.ReturnStmt:
 		// Compile the return value expression, if present.
 		if stmt.Expr != nil {
+			// --- Debug Print: Compiling ReturnStmt expression ---
+			fmt.Printf("DEBUG (Compiler): Compiling ReturnStmt expression (type %T)\n", stmt.Expr)
+			// --- End Debug Print ---
+			// --- Debug Print: Before compileExpression for ReturnStmt expression ---
+			fmt.Printf("DEBUG (Compiler): Before compileExpression for ReturnStmt expression. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
 			if err := c.compileExpression(stmt.Expr); err != nil {
 				return err
 			}
-			// Emit OpReturnValue if a value is returned.
-			c.emit(OpReturnValue) // Use OpReturnValue
+			// --- Debug Print: After compileExpression for ReturnStmt expression ---
+			fmt.Printf("DEBUG (Compiler): After compileExpression for ReturnStmt expression. Instructions length: %d\n", len(c.instructions))
+			// --- End Debug Print ---
+
+			// Emit OpReturnValue if a value is returned. OpReturnValue consumes the value from the stack.
+			c.emit(OpReturnValue) // Use OpReturnValue (34)
 		} else {
 			// Emit OpReturn if no value is returned (implicitly returns null).
-			c.emit(OpReturn) // Use OpReturn
+			// The compiler should ensure OpNull is on the stack before OpReturn,
+			// or the VM handles pushing nil for OpReturn. Current compiler
+			// emits OpNull before OpReturn in the implicit return case, which is good.
+			c.emit(OpReturn) // Use OpReturn (35)
 		}
 		// Note: A return statement typically causes an immediate jump out of the function.
 		// The VM handles this when it encounters OpReturnValue or OpReturn.
@@ -342,67 +402,14 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 	case *ast.ForStmt:
 		return c.compileFor(stmt) // Delegate to helper for for loop logic (needs implementation)
 
-	case *ast.FuncDefStmt: // Assuming this is the AST node for function literals (e.g., `function() { ... }`)
-		// Create a new compiler specifically for this function's body.
-		// This compiler will manage the function's local scope and bytecode.
-		funcCompiler := c.newFunctionCompiler()
-
-		// Define parameters as local variables in the function's scope.
-		// Assuming ast.FuncDefStmt has a field like `Params []string`
-		for _, paramName := range stmt.Params {
-			// DefineLocal internally calls Define with Local kind and increments numDefinitions for the function scope.
-			funcCompiler.DefineLocal(paramName)
-		}
-
-		// Compile the function body.
-		// The compileBlockStmt method handles entering/leaving the block's scope.
-		if err := funcCompiler.compileBlockStmt(stmt.Body); err != nil {
-			return err // Propagate compilation errors from the function body
-		}
-
-		// After compiling the body, ensure the last instruction is a return.
-		// If the block doesn't end with an explicit return, add an implicit return nil.
-		// Use the helper to get the opcode of the last emitted instruction.
-		lastOpcode := GetLastOpcode(funcCompiler.instructions)
-		if lastOpcode != OpReturn && lastOpcode != OpReturnValue {
-			funcCompiler.emit(OpNull)   // Push nil onto the stack
-			funcCompiler.emit(OpReturn) // Return from the function
-		}
-
-		// Finalize the function's bytecode.
-		// The instructions and constants are in funcCompiler.instructions and funcCompiler.constants.
-		// The number of locals is the number of definitions in the function's scope (parameters + locals).
-		funcBytecode := NewBytecode()
-		funcBytecode.Instructions = funcCompiler.instructions
-		funcBytecode.Constants = funcCompiler.constants
-		funcBytecode.NumLocals = funcCompiler.currentScope.numDefinitions // Number of parameters + locals
-		funcBytecode.NumParameters = len(stmt.Params)                     // Store the number of parameters
-		// NumGlobals is 0 for function bytecode
-
-		// Create the Function value object.
-		// This object represents the compiled function at runtime. Now in types package.
-		fn := &types.CompiledFunction{
-			Instructions:  funcBytecode.Instructions, // Bytecode.Instructions is []byte
-			NumParameters: len(stmt.Params),
-			NumLocals:     funcBytecode.NumLocals, // Also store NumLocals in CompiledFunction
-			// TODO: Add Free variables/closure information here later if implementing closures.
-			// This would involve capturing symbols from outer scopes that are used in the function body.
-		}
-
-		// Wrap the CompiledFunction in a Closure value object. Now in types package.
-		closure := &types.Closure{Fn: fn}
-
-		// Add the compiled Closure object to the *current* compiler's constant pool (the compiler compiling the code *containing* the function definition).
-		// This makes the function object available as a constant that can be pushed onto the stack.
-		c.emitConstant(closure) // emitConstant should add the value to c.constants and emit OpConstant
-
-		// The compiled expression (the function literal) leaves the function object on the stack.
-		// The calling compileStatement (e.g., AssignStmt) will then handle what to do with this value (e.g., assign it to a variable).
-
-		return nil // Successfully compiled the function literal statement (it's a statement that compiles an expression)
+	// Removed case *ast.FuncDefStmt: from compileStatement
+	// Assuming function definitions are now handled as expressions via *ast.FunctionLiteral
 
 	default:
 		// This case should ideally not be reached.
+		// --- Debug Print: Unsupported Statement ---
+		fmt.Printf("DEBUG (Compiler): Unsupported Statement type %T\n", s)
+		// --- End Debug Print ---
 		return fmt.Errorf("unsupported statement type: %T", s)
 	}
 	return nil
@@ -410,63 +417,45 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 
 // compileExpression emits bytecode for an expression node.
 func (c *Compiler) compileExpression(e ast.Expression) error {
-	// Defensive check: Ensure we are not trying to compile a statement as an expression.
-	// This directly addresses the "ImpossibleAssert" error message.
-	// This check is crucial because ast.FuncDefStmt is a Statement, not an Expression.
-	if _, ok := e.(ast.Statement); ok {
-		return fmt.Errorf("internal compiler error: attempting to compile a statement (%T) as an expression", e)
-	}
+	// --- Debug Print: Compiling Expression type %T ---
+	fmt.Printf("DEBUG (Compiler): Compiling Expression type %T\n", e)
+	// --- End Debug Print ---
 
 	switch expr := e.(type) {
 	case *ast.IntegerLiteral:
-		// Add the integer value to the constant pool and emit OpConstant.
-		c.emitConstant(types.NewInteger(expr.Value)) // Referring to types.NewInteger (from types package)
+		c.emitConstant(types.NewInteger(expr.Value))
 
 	case *ast.FloatLiteral:
-		// Add the float value to the constant pool and emit OpConstant.
-		c.emitConstant(types.NewFloat(expr.Value)) // Referring to types.NewFloat (from types package)
+		c.emitConstant(types.NewFloat(expr.Value))
 
 	case *ast.StringLiteral:
-		// Add the string value to the constant pool and emit OpConstant.
-		c.emitConstant(types.NewString(expr.Value)) // Referring to types.NewString (from types package)
+		c.emitConstant(types.NewString(expr.Value))
 
 	case *ast.BooleanLiteral:
-		// Emit OpTrue or OpFalse directly.
 		if expr.Value {
-			c.emit(OpTrue) // Use OpTrue
+			c.emit(OpTrue)
 		} else {
-			c.emit(OpFalse) // Use OpFalse
+			c.emit(OpFalse)
 		}
 
 	case *ast.NilLiteral:
-		// Emit OpNull directly.
-		c.emit(OpNull) // Use OpNull
+		c.emit(OpNull)
 
 	case *ast.Identifier:
-		// Look up the symbol (variable) in the current and outer scopes.
 		symbol, ok := c.currentScope.Resolve(expr.Name)
 		if !ok {
-			// If the symbol is not found in any scope (including globals), it's an error.
 			return fmt.Errorf("undefined variable '%s'", expr.Name)
 		}
-
-		// Emit the appropriate instruction based on the symbol's kind and scope.
 		switch symbol.Kind {
-		case Global: // Referring to Global (defined in symboltable.go, same package)
-			// Get value of a global variable. Operand is the global index.
-			c.emit(OpGetGlobal, symbol.Index) // Use OpGetGlobal
-		case Local, Parameter: // Parameters are also accessed as locals within the function frame (defined in symboltable.go, same package)
-			// Get value of a local variable or parameter. Operand is the local/parameter index.
-			// This case should ONLY be reached if compiling within a function scope.
+		case Global:
+			c.emit(OpGetGlobal, symbol.Index)
+		case Local, Parameter:
 			if !c.currentScope.isFunctionScope {
-				return fmt.Errorf("internal compiler error: attempting to get local/parameter outside function scope for '%s'", symbol.Name)
+				return fmt.Errorf("getting local '%s' outside function scope", symbol.Name)
 			}
-			// The operand for locals is 1 byte (uint8).
-			c.emit(OpGetLocal, symbol.Index) // Use OpGetLocal
-		case Builtin: // Referring to Builtin (defined in symboltable.go, same package)
-			// Getting a builtin usually means pushing the builtin function object onto the stack.
-			// If builtins are stored in the global table, OpGetGlobal is appropriate.
-			c.emit(OpGetGlobal, symbol.Index) // Use OpGetGlobal
+			c.emit(OpGetLocal, symbol.Index)
+		case Builtin:
+			c.emit(OpGetGlobal, symbol.Index) // Builtins are stored in globals
 		default:
 			return fmt.Errorf("unsupported symbol kind for get: %v", symbol.Kind)
 		}
@@ -480,10 +469,10 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 			}
 			// If the left side is false (or nil), jump over the right side compilation.
 			// The falsy value is already on the stack and is the result of the 'and' if short-circuited.
-			jumpFalsePos := c.emit(OpJumpNotTruthy, 0) // Use OpJumpNotTruthy
+			jumpFalsePos := c.emit(OpJumpNotTruthy, 0) // Use OpJumpNotTruthy from code.go
 
 			// If the left side was true, pop its value (we only need the right side's value for the result).
-			c.emit(OpPop) // Use OpPop
+			c.emit(OpPop) // Use OpPop from code.go
 
 			// Compile the right side. It leaves a boolean value on the stack.
 			if err := c.compileExpression(expr.Right); err != nil {
@@ -501,10 +490,10 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 			}
 			// If the left side is true (or not nil), jump over the right side compilation.
 			// The truthy value is already on the stack and is the result of the 'or' if short-circuited.
-			jumpTruePos := c.emit(OpJumpTruthy, 0) // Use OpJumpTruthy
+			jumpTruePos := c.emit(OpJumpTruthy, 0) // Use OpJumpTruthy from code.go
 
 			// If the left side was false, pop its value (we only need the right side's value for the result).
-			c.emit(OpPop) // Use OpPop
+			c.emit(OpPop) // Use OpPop from code.go
 
 			// Compile the right side. It leaves a boolean value on the stack.
 			if err := c.compileExpression(expr.Right); err != nil {
@@ -513,7 +502,7 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 
 			// Patch the jump instruction to point to the instruction immediately after the right side compilation.
 			c.patchJump(jumpTruePos, len(c.instructions)) // Pass the target position (current length)
-			// The result of the expression (either Left's truthy value or Right's value) is now on the stack.
+			// The result of the expression (either Left's falsy value or Right's value) is now on the stack.
 
 		} else {
 			// For other binary operators (+, -, *, /, %, ^, ==, !=, <, >, <=, >=).
@@ -530,29 +519,29 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 			// The VM will pop the two operands, perform the operation, and push the result.
 			switch expr.Operator {
 			case "+":
-				c.emit(OpAdd) // Use OpAdd
+				c.emit(OpAdd) // Use OpAdd from code.go
 			case "-":
-				c.emit(OpSub) // Use OpSub
+				c.emit(OpSub) // Use OpSub from code.go
 			case "*":
-				c.emit(OpMul) // Use OpMul
+				c.emit(OpMul) // Use OpMul from code.go
 			case "/":
-				c.emit(OpDiv) // Use OpDiv
+				c.emit(OpDiv) // Use OpDiv from code.go
 			case "%":
-				c.emit(OpMod) // Use OpMod
+				c.emit(OpMod) // Use OpMod from code.go
 			case "^":
-				c.emit(OpPow) // Use OpPow
+				c.emit(OpPow) // Use OpPow from code.go
 			case "==":
-				c.emit(OpEqual) // Use OpEqual
+				c.emit(OpEqual) // Use OpEqual from code.go
 			case "!=":
-				c.emit(OpNotEqual) // Use OpNotEqual
+				c.emit(OpNotEqual) // Use OpNotEqual from code.go
 			case "<":
-				c.emit(OpLessThan) // Use OpLessThan
+				c.emit(OpLessThan) // Use OpLessThan from code.go
 			case ">":
-				c.emit(OpGreaterThan) // Use OpGreaterThan
+				c.emit(OpGreaterThan) // Use OpGreaterThan from code.go
 			case "<=":
-				c.emit(OpLessEqual) // Use OpLessEqual
+				c.emit(OpLessEqual) // Use OpLessEqual from code.go
 			case ">=":
-				c.emit(OpGreaterEqual) // Use OpGreaterEqual
+				c.emit(OpGreaterEqual) // Use OpGreaterEqual from code.go
 			default:
 				// This case should ideally not be reached if the parser/AST builder is correct.
 				return fmt.Errorf("unknown binary operator %s", expr.Operator)
@@ -569,12 +558,12 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		// The VM will pop the operand, perform the operation, and push the result.
 		switch expr.Operator {
 		case "-":
-			c.emit(OpMinus) // Use OpMinus
+			c.emit(OpMinus) // Use OpMinus from code.go
 		case "not":
-			c.emit(OpNot) // Use OpNot
+			c.emit(OpNot) // Use OpNot from code.go
 		case "+":
 			// Unary plus is typically a no-op semantically, but we still compile the expression.
-			// No opcode is needed unless you want to enforce type checks at runtime (e.g., ensure the operand is a number).
+			// No opcode is needed unless you want to enforce type checks at runtime (e.g., enforce the operand is a number).
 			// For now, we do nothing after compiling the expression.
 		default:
 			// This case should ideally not be reached.
@@ -591,7 +580,7 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		}
 		// Emit OpArray with the number of elements.
 		// The VM will pop the elements from the stack and create a list.
-		c.emit(OpArray, count) // Use OpArray
+		c.emit(OpArray, count) // Use OpArray from code.go
 
 	case *ast.TableLiteral:
 		// Compile each field (key and value) of the table.
@@ -609,7 +598,7 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		}
 		// Emit OpHash with the number of fields (key-value pairs).
 		// The VM will pop 2*count values from the stack (key, value pairs) and create a hash/table.
-		c.emit(OpHash, count) // Use OpHash
+		c.emit(OpHash, count) // Use OpHash from code.go
 
 	case *ast.IndexExpr:
 		// Compile the primary expression (the aggregate, e.g., list or table). Leaves aggregate on stack.
@@ -622,38 +611,67 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		}
 		// Stack top is now [..., aggregate, index].
 		// Emit OpIndex. The VM should pop index, pop aggregate, perform the index lookup, and push the result.
-		c.emit(OpIndex) // Use OpIndex
+		c.emit(OpIndex) // Use OpIndex from code.go
 
 	case *ast.CallExpr:
-		// Compile the callee expression (the function to call). Leaves the function object on the stack.
 		if err := c.compileExpression(expr.Callee); err != nil {
 			return err
 		}
-		// Compile each argument expression. They leave their results on the stack in order.
-		argCount := len(expr.Args)
-		for _, a := range expr.Args {
-			if err := c.compileExpression(a); err != nil {
+		for _, arg := range expr.Args {
+			if err := c.compileExpression(arg); err != nil {
 				return err
 			}
 		}
-		// Stack top is now [..., function_object, arg1, arg2, ..., argN].
-		// Emit OpCall with the number of arguments.
-		// The VM will pop the arguments and the function object, set up a new call frame, and execute the function's bytecode.
-		c.emit(OpCall, argCount) // Use OpCall
+		c.emit(OpCall, len(expr.Args))
 
-	// Removed the case for *ast.FuncDefStmt from compileExpression
-	// case *ast.FuncDefStmt: // This case should NOT be here
+	case *ast.FunctionLiteral:
+		// New function scope
+		fnCompiler := c.newFunctionCompiler()
+		// Define parameters
+		for _, p := range expr.Params {
+			fnCompiler.DefineLocal(p)
+		}
+		// Compile body statements
+		for _, stmt := range expr.Body.Stmts {
+			if err := fnCompiler.compileStatement(stmt); err != nil {
+				return err
+			}
+		}
 
-	// TODO: Add cases for other expression types as you implement them
-	// case *ast.PrefixExpr: // Already handled by UnaryExpr
-	// case *ast.InfixExpr: // Already handled by BinaryExpr
-	// case *ast.IfExpr: // If expressions (ternary operator or similar)
-	// case *ast.WhileExpr: // While expressions (if your language supports them)
-	// case *ast.ForExpr: // For expressions (if your language supports them)
-	// case *ast.TableAccessExpr: // For accessing fields of a table/object (e.g., obj.field)
+		// --- Debug Print: Function Instructions After Body Compilation ---
+		fmt.Printf("DEBUG (Compiler): Function Instructions after body compilation: %v\n", fnCompiler.instructions)
+		// --- End Debug Print ---
+
+		// Implicit return nil if needed
+		// Check if the function's instruction slice is empty or if the last instruction is NOT a return opcode.
+		if len(fnCompiler.instructions) == 0 || (!fnCompiler.lastInstructionIs(OpReturn) && !fnCompiler.lastInstructionIs(OpReturnValue)) {
+			// --- Debug Print: Emitting implicit nil return for FunctionLiteral ---
+			fmt.Printf("DEBUG (Compiler): Emitting implicit nil return for FunctionLiteral\n")
+			// --- End Debug Print ---
+			fnCompiler.emit(OpNull)
+			fnCompiler.emit(OpReturn)
+		}
+		// The else if fnCompiler.lastInstructionIs(OpPop) block is removed as it's not needed
+		// with the corrected implicit return logic and the OpPop is handled in ExprStmt.
+
+		// Gather free symbols
+		freeSyms := fnCompiler.currentScope.FreeSymbols()
+		// Create CompiledFunction
+		compiledFn := &types.CompiledFunction{
+			Instructions:  fnCompiler.instructions, // <-- This is the slice being stored
+			NumParameters: len(expr.Params),
+			NumLocals:     fnCompiler.currentScope.NumDefinitions(),
+			FreeCount:     len(freeSyms),
+		}
+		// Add to constant pool
+		constIndex := c.addConstant(compiledFn)
+		// Emit closure opcode, capturing frees
+		c.emit(OpClosure, constIndex, len(freeSyms))
 
 	default:
-		// If an expression type is not handled, return an error.
+		// --- Debug Print: Unsupported Expression ---
+		fmt.Printf("DEBUG (Compiler): Unsupported Expression type %T\n", e)
+		// --- End Debug Print ---
 		return fmt.Errorf("unsupported expression type: %T", e)
 	}
 	return nil
@@ -688,7 +706,7 @@ func (c *Compiler) compileIf(stmt *ast.IfStmt) error {
 	}
 
 	// Emit OpJumpNotTruthy with a placeholder operand. This jumps if the condition is false.
-	jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999) // Use OpJumpNotTruthy
+	jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 0) // Use OpJumpNotTruthy from code.go
 
 	// Compile the 'then' block.
 	if err := c.compileBlockStmt(stmt.Then); err != nil {
@@ -703,69 +721,105 @@ func (c *Compiler) compileIf(stmt *ast.IfStmt) error {
 	// Assuming for now that the last instruction of the block handles the value.
 	// If the block is empty, compileBlockStmt might emit nothing.
 	// TODO: Handle empty blocks and ensure a value is left on the stack for the if expression.
-	// if c.lastInstructionIs(OpPop) { // Use OpPop
-	// 	c.removeLastPop()
+	// if c.lastInstructionIs(OpPop) { // Use OpPop from code.go
+	//  c.removeLastPop()
 	// }
 
 	// Emit OpJump with a placeholder operand to jump over the else-if and else blocks.
-	jumpPos := c.emit(OpJump, 9999) // Use OpJump
+	jumpToEndPos := c.emit(OpJump, 0) // Use OpJump from code.go
 
-	// Patch the OpJumpNotTruthy operand to point to the instruction after the 'then' block.
-	afterThenPos := len(c.instructions) // Use c.instructions
+	// Patch the OpJumpNotTruthy from the condition to point to the instruction
+	// immediately after the 'then' block (which is the OpJump or the start of else-if/else).
+	afterThenPos := len(c.instructions)
 	c.patchJump(jumpNotTruthyPos, afterThenPos)
 
-	// Handle else-if blocks.
-	for _, elseif := range stmt.ElseIfs {
-		// Compile the elseif condition.
-		if err := c.compileExpression(elseif.Cond); err != nil {
-			return err
-		}
-		// Emit OpJumpNotTruthy for the elseif condition.
-		elseifJumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999) // Use OpJumpNotTruthy
+	// Compile else-if blocks
+	// TODO: Implement compilation of else-if blocks
 
-		// Compile the elseif body.
-		if err := c.compileBlockStmt(elseif.Body); err != nil {
-			return err
-		}
-
-		// Emit OpJump after elseif body to jump over remaining else-if/else blocks.
-		elseifJumpPos := c.emit(OpJump, 9999) // Use OpJump
-
-		// Patch the OpJumpNotTruthy for this elseif to point after its body.
-		afterElseifBodyPos := len(c.instructions) // Use c.instructions
-		c.patchJump(elseifJumpNotTruthyPos, afterElseifBodyPos)
-
-		// The previous jump (either from the main 'then' block or a previous elseif)
-		// should now jump to the instruction after this elseif block.
-		c.patchJump(jumpPos, afterElseifBodyPos) // Update the main jump target
-
-		// The next jump (from this elseif's body) will jump past the remaining blocks.
-		jumpPos = elseifJumpPos
-	}
-
-	// Handle the 'else' block.
+	// Compile the else block, if present.
 	if stmt.Else != nil {
 		if err := c.compileBlockStmt(stmt.Else); err != nil {
 			return err
 		}
+		// After the 'else' block, if the last instruction was OpPop, remove it.
+		// TODO: Handle empty else blocks and ensure a value is left on the stack.
+		// if c.lastInstructionIs(OpPop) { // Use OpPop from code.go
+		//  c.removeLastPop()
+		// }
 	} else {
-		// If there is no 'else' block and the condition was false,
-		// the jumpNotTruthy jumps here. We need to push a default value (like nil)
-		// onto the stack for the if expression's result.
-		c.emit(OpNull) // Use OpNull
+		// If there's no else block, and the 'then' block was not executed,
+		// the result of the if expression is implicitly nil.
+		// We need to push nil here if the condition was false and there was no else.
+		// This happens when the OpJumpNotTruthy is taken and there was no else block.
+		// So, the target of jumpNotTruthyPos should implicitly push nil if no else.
+		// This requires adjusting the jump target or emitting nil after the jump target.
+		// A simpler approach is to always push nil after the OpJumpNotTruthy if there's no else block.
+		// This is done by placing the nil push *after* the jump target in the bytecode stream.
+		// So, if there's no else, the jumpNotTruthy jumps *past* the 'then' block and lands here.
+		// We need to ensure nil is pushed here.
+		// The current logic is flawed for the "no else" case regarding the expression value.
+		// Let's refine the jump targets.
+
+		// Correct logic for if (expr) { block }
+		// compile cond -> OpJumpNotTruthy placeholder -> compile block -> OpJump placeholder -> Patch JumpNotTruthy to after block -> Patch Jump to after everything.
+		// If no else, the OpJumpNotTruthy should jump to after the OpJump.
+		// The value of the if expression when no else and condition is false is nil.
+		// We need to ensure nil is on the stack in that case.
+
+		// Let's rethink the if compilation for expression value.
+		// The if expression's value is the value of the last expression in the executed block.
+		// If no block is executed (condition false, no else), the value is nil.
+
+		// New approach for if (expr) { block } else { block } as an expression:
+		// compile cond -> OpJumpNotTruthy placeholder_else_or_end
+		// compile then_block -> OpJump placeholder_end
+		// patch jumpNotTruthyPos to current instruction (start of else or end)
+		// if else_block exists:
+		//   compile else_block
+		// patch jumpToEndPos to current instruction (after else_block)
+		//
+		// For expression value:
+		// The last instruction of the executed block must leave its value on the stack.
+		// If a block is empty or ends with a statement that doesn't leave a value,
+		// we need to push nil at the end of that block's compilation.
+
+		// Let's revert to a simpler model for now: if statements do not produce a value.
+		// Any value left by the last expression statement in a block is popped.
+		// The compiler's current logic for OpPop after ExprStmt supports this.
+		// The issue with nil results likely stems from the compiler not leaving
+		// the return value on the stack before OpReturnValue, or the VM issue.
+		// The if/else compilation itself seems okay for control flow, but might need
+		// adjustment if if-expressions are a language feature. Assuming they are not for now.
+
+		// Let's fix the jumps based on the current control flow model.
+		// jumpNotTruthyPos jumps to the start of the else block or the end if no else.
+		// jumpToEndPos jumps from the end of the then block to the end of the if statement.
+
+		// The current structure:
+		// compile cond
+		// OpJumpNotTruthy placeholder1
+		// compile then_block
+		// OpJump placeholder2
+		// patch placeholder1 to here (start of else or end)
+		// compile else_block (if any)
+		// patch placeholder2 to here (end of if)
+
+		// This control flow seems correct for skipping blocks.
+		// The value issue is separate.
+
 	}
 
-	// Patch the final jump (from the 'then' block or the last elseif) to point after the 'else' block (or the pushed nil).
-	afterElsePos := len(c.instructions) // Use c.instructions
-	c.patchJump(jumpPos, afterElsePos)
+	// Patch the OpJump from the 'then' block to point to the instruction immediately after the if statement.
+	endOfIfPos := len(c.instructions)
+	c.patchJump(jumpToEndPos, endOfIfPos)
 
 	return nil
 }
 
-// compileWhile compiles a while loop statement.
+// compileWhile compiles a while loop.
 func (c *Compiler) compileWhile(stmt *ast.WhileStmt) error {
-	// Mark the position before the condition for the loop's jump back.
-	loopStartPos := len(c.instructions) // Use c.instructions
+	// Mark the start of the loop condition for the jump back.
+	loopStartPos := len(c.instructions)
 
 	// Compile the loop condition.
 	if err := c.compileExpression(stmt.Cond); err != nil {
@@ -773,196 +827,187 @@ func (c *Compiler) compileWhile(stmt *ast.WhileStmt) error {
 	}
 
 	// Emit OpJumpNotTruthy with a placeholder operand. This jumps out of the loop if the condition is false.
-	jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999) // Use OpJumpNotTruthy
+	jumpOutOfLoopPos := c.emit(OpJumpNotTruthy, 0) // Use OpJumpNotTruthy from code.go
 
 	// Compile the loop body.
 	if err := c.compileBlockStmt(stmt.Body); err != nil {
 		return err
 	}
 
-	// After the loop body, emit OpJump to jump back to the start of the loop condition.
-	c.emit(OpJump, loopStartPos) // Use OpJump
+	// Emit OpJump with an operand to jump back to the start of the loop condition.
+	c.emit(OpJump, loopStartPos) // Use OpJump from code.go
 
-	// Patch the OpJumpNotTruthy operand to point to the instruction immediately after the loop.
-	afterLoopPos := len(c.instructions) // Use c.instructions
-	c.patchJump(jumpNotTruthyPos, afterLoopPos)
-
-	// The while loop itself doesn't leave a value on the stack.
-	// If the language requires a value (e.g., for use in an expression context),
-	// you might need to push a default value (like nil) here.
-	// Assuming for now it's a statement and doesn't leave a value.
+	// Patch the OpJumpNotTruthy from the condition to point to the instruction immediately after the loop body (the OpJump).
+	// The target is the instruction immediately after the OpJump.
+	afterLoopBodyPos := len(c.instructions)
+	c.patchJump(jumpOutOfLoopPos, afterLoopBodyPos)
 
 	return nil
 }
 
-// compileFor compiles a for loop statement.
+// compileFor compiles a for loop.
 func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
-	// Compile the iterable expression.
-	if err := c.compileExpression(stmt.Iterable); err != nil {
-		return err
-	}
-	// Get an iterator for the iterable.
-	c.emit(OpGetIterator) // Use OpGetIterator
-
-	// Enter a new scope for the loop variable and loop body.
-	// This scope's function scope status is inherited from the outer scope.
-	c.EnterScope(c.currentScope.isFunctionScope) // Pass the function scope status of the outer scope
-
-	var loopVarSymbol *Symbol // Use Symbol from this package
-
-	// Define the loop variable in the current (loop's block) scope.
-	// The kind (Global or Local) depends on whether the outer scope is a function scope.
-	if c.currentScope.isFunctionScope {
-		// If the outer scope is a function scope, the loop variable is local to this function frame.
-		loopVarSymbol = c.DefineLocal(stmt.Variable) // Define as Local in the current (loop) scope
-	} else {
-		// If the outer scope is NOT a function scope (main program or block in main),
-		// the loop variable is a global variable.
-		// We define it in the global table, even though we are in a nested block scope.
-		// This flattens the variable into the global scope for the main program.
-		loopVarSymbol = c.globals.Define(stmt.Variable, Global) // Define as Global in the global table
-	}
-
-	// Mark the position for the loop's jump back (to get the next item).
-	loopStartPos := len(c.instructions) // Use c.instructions
-
-	// Get the next value from the iterator. OpIteratorNext pushes value, boolean (true if successful).
-	c.emit(OpIteratorNext) // Use OpIteratorNext
-
-	// Emit OpJumpNotTruthy with a placeholder operand. This jumps out of the loop if the boolean is false (iteration done).
-	jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999) // Use OpJumpNotTruthy
-
-	// The next value is now on top of the stack. Assign it to the loop variable.
-	// Use the correct opcode based on the loop variable's kind.
-	switch loopVarSymbol.Kind {
-	case Global:
-		c.emit(OpSetGlobal, loopVarSymbol.Index) // Use OpSetGlobal
-	case Local:
-		c.emit(OpSetLocal, loopVarSymbol.Index) // Use OpSetLocal
-	default:
-		// This should not happen based on the definition logic above.
-		return fmt.Errorf("internal compiler error: unexpected symbol kind for loop variable '%s' after definition: %v", stmt.Variable, loopVarSymbol.Kind)
-	}
-
-	// Compile the loop body.
-	if err := c.compileBlockStmt(stmt.Body); err != nil {
-		// If there's an error, leave the scope before returning.
-		c.LeaveScope()
-		return err
-	}
-
-	// After the loop body, emit OpJump to jump back to the start of the loop (to get the next item).
-	c.emit(OpJump, loopStartPos) // Use OpJump
-
-	// Patch the OpJumpNotTruthy operand to point to the instruction immediately after the loop.
-	afterLoopPos := len(c.instructions) // Use c.instructions
-	c.patchJump(jumpNotTruthyPos, afterLoopPos)
-
-	// Leave the scope for the loop variable and loop body.
-	c.LeaveScope()
-
-	// The iterator is still on the stack after the loop finishes. Pop it.
-	c.emit(OpPop) // Use OpPop
-
-	// The for loop itself doesn't leave a value on the stack.
-	// If the language requires a value, you might need to push a default value (like nil) here.
-
-	return nil
+	// TODO: Implement for loop compilation.
+	// A typical for loop (init; cond; post) body can be compiled as:
+	// compile init (if any)
+	// loop_start:
+	// compile cond
+	// OpJumpNotTruthy jump_out_of_loop
+	// compile body
+	// compile post (if any)
+	// OpJump loop_start
+	// jump_out_of_loop:
+	return fmt.Errorf("for loops are not yet implemented")
 }
 
-// emit adds an instruction to the current compilation unit's instructions.
+// emit adds an opcode and its operands to the instructions.
 // It returns the starting position of the emitted instruction.
-func (c *Compiler) emit(op OpCode, operands ...int) int { // Use OpCode
-	ins := Make(op, operands...) // Use Make
+func (c *Compiler) emit(op OpCode, operands ...int) int { // Use OpCode from code.go
+	// Get the definition of the opcode to know the operand widths.
+	def, ok := Lookup(op) // Use Lookup from code.go
+	if !ok {
+		// This should not happen if all opcodes are defined.
+		panic(fmt.Sprintf("unknown opcode %v", op))
+	}
+
+	// Calculate the instruction length (opcode + operands).
+	instructionLen := 1 // Opcode byte
+	for _, width := range def.OperandWidths {
+		instructionLen += width
+	}
+
+	// Ensure enough capacity in the instructions slice.
+	// Grow the slice if needed.
+	newInstructions := make(Instructions, instructionLen) // Use Instructions from code.go
+	newInstructions[0] = byte(op)
+
+	// Encode and add operands.
+	offset := 1
+	for i, operand := range operands {
+		width := def.OperandWidths[i]
+		switch width {
+		case 1: // 1-byte operand (uint8)
+			newInstructions[offset] = byte(operand)
+		case 2: // 2-byte operand (uint16)
+			binary.BigEndian.PutUint16(newInstructions[offset:], uint16(operand)) // Use binary.BigEndian
+		// Add cases for other operand widths if needed (e.g., 4 bytes for uint32)
+		default:
+			// This should not happen if operand widths are defined correctly.
+			panic(fmt.Sprintf("unsupported operand width %d", width))
+		}
+		offset += width
+	}
+
+	// Get the current position before appending.
 	pos := len(c.instructions)
-	c.instructions = append(c.instructions, ins...)
-	// Note: For tracking last/previous instructions for optimizations like removing OpPop,
-	// you would need to add logic here to update those fields in the Compiler struct
-	// or the CompilationScope if using scopes for instruction tracking.
+
+	// Append the new instruction to the instructions slice.
+	c.instructions = append(c.instructions, newInstructions...)
+
+	// --- Debug Print: Emitted Opcode ---
+	fmt.Printf("DEBUG (Compiler): Emitted Opcode %v at position %d\n", op, pos)
+	// --- End Debug Print ---
+
+	// Return the starting position of the emitted instruction.
 	return pos
 }
 
-// emitConstant adds a constant to the current compilation unit's constant pool
-// and emits an OpConstant instruction.
-func (c *Compiler) emitConstant(value types.Value) {
-	// Add the value to the constant pool.
-	constantIndex := len(c.constants)
-	c.constants = append(c.constants, value)
-
-	// Emit OpConstant instruction with the index of the added constant.
-	c.emit(OpConstant, constantIndex) // Use OpConstant
+// emitConstant adds a value to the constant pool, emits OpConstant, and returns the instruction position.
+func (c *Compiler) emitConstant(obj types.Value) int {
+	// Add the constant to the pool and get its index.
+	constIndex := c.addConstant(obj)
+	// Emit the OpConstant instruction with the constant's index as the operand.
+	// OpConstant has a 2-byte operand for the constant pool index.
+	return c.emit(OpConstant, constIndex) // Use OpConstant from code.go
 }
 
-// patchJump updates the operand of a jump instruction at a given position.
-func (c *Compiler) patchJump(jumpPos int, targetPos int) {
-	// The jump instruction is at jumpPos. The operand (the jump target)
-	// starts after the opcode byte.
-	opcode := OpCode(c.instructions[jumpPos]) // Use OpCode
-	def, ok := Lookup(opcode)                 // Use Lookup
-	if !ok || len(def.OperandWidths) == 0 {
-		// This should not happen for jump instructions.
-		fmt.Fprintf(os.Stderr, "ERROR: patchJump called on non-jump instruction at position %d\n", jumpPos)
-		return
+// addConstant adds a value to the constant pool and returns its index.
+func (c *Compiler) addConstant(obj types.Value) int { // Takes types.Value
+	// Check if the constant already exists to avoid duplicates.
+	// This requires implementing an Equals method on all Value types.
+	for i, constant := range c.constants {
+		if constant.Equals(obj) {
+			return i // Return index of existing constant
+		}
 	}
 
-	// Assuming jump operands are 2 bytes (uint16).
-	if def.OperandWidths[0] != 2 {
-		fmt.Fprintf(os.Stderr, "ERROR: patchJump called on jump instruction with non-2-byte operand at position %d\n", jumpPos)
-		return
-	}
-
-	// Encode the target position as a 2-byte big-endian integer.
-	targetBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(targetBytes, uint16(targetPos))
-
-	// Copy the target bytes into the instruction slice at the correct offset.
-	// The offset is 1 byte for the opcode.
-	copy(c.instructions[jumpPos+1:], targetBytes)
+	// If not found, add the new constant.
+	c.constants = append(c.constants, obj)
+	return len(c.constants) - 1 // Return index of the newly added constant
 }
 
-// TODO: Implement helper functions like lastInstructionIs, removeLastPop, changeOperand
-// if they are needed for optimizations or specific language features.
-// The provided code snippet uses lastInstructionIs and removeLastPop in the previous version.
-// We should add them back if they are required for the logic (e.g., in IfStmt compilation).
-
-// lastInstructionIs checks if the last emitted instruction is of the given opcode.
-// This requires tracking the position and opcode of the last instruction.
-// We can add fields to the Compiler struct or CompilationScope for this.
-// For simplicity now, let's re-implement based on the instruction slice directly,
-// but a more efficient approach would track it during emit.
-func (c *Compiler) lastInstructionIs(op OpCode) bool { // Use OpCode
+// lastInstructionIs checks if the last emitted instruction is the given opcode.
+func (c *Compiler) lastInstructionIs(op OpCode) bool { // Use OpCode from code.go
+	// --- Debug Print: Checking last instruction ---
+	fmt.Printf("DEBUG (Compiler): Checking if last instruction is %v. Current instructions length: %d\n", op, len(c.instructions))
+	// --- End Debug Print ---
 	if len(c.instructions) == 0 {
+		// --- Debug Print: lastInstructionIs returning false (empty instructions) ---
+		fmt.Println("DEBUG (Compiler): lastInstructionIs returning false (empty instructions)")
+		// --- End Debug Print ---
 		return false
 	}
-	// This is a simplified check that only works if the last instruction has no operands.
-	// A proper implementation needs to parse the last instruction's length.
-	// Using GetLastOpcode from the bytecode package is better.
-	return GetLastOpcode(c.instructions) == op // Use GetLastOpcode
+	// Get the last emitted instruction's opcode.
+	lastOp := OpCode(c.instructions[len(c.instructions)-1])
+	// --- Debug Print: lastInstructionIs check result ---
+	fmt.Printf("DEBUG (Compiler): Last instruction is %v. Check result: %t\n", lastOp, lastOp == op)
+	// --- End Debug Print ---
+	return lastOp == op
 }
 
-// removeLastPop removes the last OpPop instruction if it exists.
-// This is needed for expression statements within contexts where the value is used (e.g., If expressions).
+// removeLastPop removes the last emitted OpPop instruction.
+// This is useful for expression statements that are the last statement in a block
+// and whose value needs to be the result of the block/function.
 func (c *Compiler) removeLastPop() {
-	// Find the last instruction's position and opcode.
-	currentLen := len(c.instructions)
-	if currentLen == 0 {
-		return // Nothing to remove
-	}
+	// Get the definition of OpPop to know its length (1 byte).
+	// OpPop has no operands, so its size is always 1 byte.
+	opPopSize := 1
 
-	// Iterate backward to find the start of the last instruction.
-	// This requires parsing instruction lengths from the end.
-	// A more efficient approach is to track the last instruction's position during emit.
-	// For now, let's assume OpPop is always 1 byte and is the last instruction.
-	// TODO: Implement proper backward parsing or track last instruction position.
-
-	// Simplified assumption: last instruction is OpPop (1 byte)
-	if c.instructions[currentLen-1] == byte(OpPop) { // Use OpPop
-		c.instructions = c.instructions[:currentLen-1]
-		// Need to update last/prev instruction tracking if implemented.
+	// Ensure the last instruction is indeed OpPop.
+	if !c.lastInstructionIs(OpPop) {
+		// Should not happen if called correctly.
+		panic("last instruction is not OpPop")
 	}
+	// Remove the last instruction (OpPop).
+	c.instructions = c.instructions[:len(c.instructions)-opPopSize]
 }
 
-// changeOperand changes the operand of an instruction at a given position.
-// This is used by patchJump, but might be needed for other optimizations.
-// It's already implemented within patchJump for jump instructions.
-// If needed for other opcodes, a more general implementation would be required.
+// patchJump modifies the operand of a jump instruction.
+// It takes the position of the jump instruction and the target position.
+func (c *Compiler) patchJump(jumpPos int, targetPos int) {
+	// Get the definition of the jump opcode (OpJump or OpJumpNotTruthy).
+	// Assuming they both have a 2-byte operand for the jump target.
+	def, ok := Lookup(OpCode(c.instructions[jumpPos])) // Use Lookup from code.go
+	if !ok {
+		// Should not happen.
+		panic(fmt.Sprintf("opcode at position %d not found", jumpPos))
+	}
+	// Ensure the operand width is 2 bytes.
+	if len(def.OperandWidths) != 1 || def.OperandWidths[0] != 2 {
+		// Should not happen if jump opcodes are defined correctly.
+		panic(fmt.Sprintf("opcode at position %d is not a jump instruction with 2-byte operand", jumpPos))
+	}
+
+	// The target position is relative to the start of the instructions.
+	// The operand is the relative jump offset.
+	// For a forward jump, the operand is the distance from the *end* of the jump instruction
+	// to the target instruction.
+	// Jump instruction starts at jumpPos, its operand is at jumpPos + 1.
+	// The operand is 2 bytes, so the instruction ends at jumpPos + 1 + 2 = jumpPos + 3.
+	// The distance is targetPos - (jumpPos + 3).
+	// However, in many VMs, the jump target is simply the absolute instruction index.
+	// Let's assume the operand is the absolute target position for simplicity.
+	// If your VM expects a relative jump, you'll need to calculate the offset.
+	// Assuming absolute target for now.
+
+	// Encode the target position as a 2-byte unsigned integer.
+	operand := uint16(targetPos)
+	// Write the operand into the instructions slice at the correct position.
+	binary.BigEndian.PutUint16(c.instructions[jumpPos+1:], operand) // Use binary.BigEndian
+}
+
+// addConstant helper is defined above.
+// emit helper is defined above.
+// lastInstructionIs helper is defined above.
+// removeLastPop helper is defined above.
+// patchJump helper is defined above.
