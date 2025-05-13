@@ -349,29 +349,47 @@ func (vm *VM) Run() error {
 			}
 			vm.push(&types.List{Elements: elements}) // Referring to List from types package
 
-		case compiler.OpHash: // Using compiler.OpHash (from compiler package)
-			numPairs := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                                 // Operand (2 bytes for uint16)
-			// Key-value pairs are on the stack: key1, value1, key2, value2, ...
-			// Pop them in reverse order: valueN, keyN, ..., value1, key1
-			fields := make(map[string]types.Value) // Referring to Value from types package
-			for i := 0; i < int(numPairs); i++ {
-				value := vm.pop()
-				key := vm.pop()
-				keyStr, ok := key.(*types.String) // Assuming keys are strings
-				if !ok {
-					// TODO: Handle non-string keys or return runtime error
-					fmt.Fprintf(os.Stderr, "runtime error: hash key must be a string, got %s\n", key.Type())
-					return fmt.Errorf("runtime error: hash key must be a string, got %s", key.Type())
-				}
-				fields[keyStr.Value] = value
+		case compiler.OpHash:
+			numPairs := compiler.ReadUint16(instructions[ip+1:])
+			currentFrame.ip += 2
+
+			// Elements are on the stack in reverse order (valueN, keyN, ... value1, key1)
+			// We need to pop them and store them to build the ordered list.
+			// Pop all pairs first.
+			poppedPairs := make([]struct {
+				Key   types.Value
+				Value types.Value
+			}, numPairs)
+			// Pop in reverse order of compilation (which is value, then key)
+			for i := int(numPairs) - 1; i >= 0; i-- {
+				poppedPairs[i].Value = vm.pop() // Pop value
+				poppedPairs[i].Key = vm.pop()   // Pop key
 			}
-			vm.push(&types.Table{Fields: fields}) // Referring to Table from types package
+
+			// Now build the ordered structure for the Table from the popped pairs in the correct order (key1, value1, ...)
+			orderedPairs := make([]types.TablePair, numPairs) // Use the new TablePair struct
+			lookupMap := make(map[string]int, numPairs)
+
+			// Iterate through the popped pairs in their original compilation order (key1, value1, ...)
+			for i := 0; i < int(numPairs); i++ {
+				keyStr, ok := poppedPairs[i].Key.(*types.String)
+				if !ok {
+					return fmt.Errorf("runtime error: hash key must be a string, got %s", poppedPairs[i].Key.Type())
+				}
+				orderedPairs[i] = types.TablePair{Key: keyStr.Value, Value: poppedPairs[i].Value}
+				lookupMap[keyStr.Value] = i // Store index for Lookup
+			}
+
+			// Push the new Table with the ordered structure.
+			// Use the NewTable helper which handles initializing the Lookup map correctly.
+			vm.push(types.NewTable(orderedPairs)) // Use the NewTable helper
 
 		case compiler.OpIndex: // Using compiler.OpIndex (from compiler package)
+			// Stack top is [..., aggregate, index].
 			index := vm.pop()
 			aggregate := vm.pop()
-			// Call the GetIndex method on the aggregate value
+			// Call the GetIndex method on the aggregate value.
+			// This method is now implemented in the types package to handle the new Table structure.
 			result, err := aggregate.GetIndex(index)
 			if err != nil {
 				// TODO: Handle runtime error
@@ -382,10 +400,12 @@ func (vm *VM) Run() error {
 			// ip already incremented by the loop
 
 		case compiler.OpSetIndex: // Using compiler.OpSetIndex (from compiler package)
+			// Stack top is [..., aggregate, index, value].
 			value := vm.pop()
 			index := vm.pop()
 			aggregate := vm.pop()
-			// Call the SetIndex method on the aggregate value
+			// Call the SetIndex method on the aggregate value.
+			// This method is now implemented in the types package to handle the new Table structure.
 			err := aggregate.SetIndex(index, value)
 			if err != nil {
 				// TODO: Handle runtime error
@@ -636,323 +656,291 @@ func (vm *VM) add(left, right types.Value) types.Value { // Referring to Value f
 }
 
 // subtract performs subtraction on two values.
-func (vm *VM) subtract(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+func (vm *VM) subtract(left, right types.Value) types.Value { // Ref
+	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform subtraction on nil values\n")
-		return &types.Nil{} // Referring to Nil from types package
+		return &types.Nil{}
 	}
 
-	// Subtraction is typically only defined for numbers.
-	leftInt, isLeftInt := left.(*types.Integer)      // Referring to Integer from types package
-	leftFloat, isLeftFloat := left.(*types.Float)    // Referring to Float from types package
-	rightInt, isRightInt := right.(*types.Integer)   // Referring to Integer from types package
-	rightFloat, isRightFloat := right.(*types.Float) // Referring to Float from types package
-
-	if isLeftInt && isRightInt {
-		return &types.Integer{Value: leftInt.Value - rightInt.Value} // Referring to Integer from types package
+	switch left := left.(type) {
+	case *types.Integer:
+		switch right := right.(type) {
+		case *types.Integer:
+			return &types.Integer{Value: left.Value - right.Value}
+		case *types.Float:
+			return &types.Float{Value: float64(left.Value) - right.Value}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: integer - %s\n", right.Type())
+			return &types.Nil{}
+		}
+	case *types.Float:
+		switch right := right.(type) {
+		case *types.Integer:
+			return &types.Float{Value: left.Value - float64(right.Value)}
+		case *types.Float:
+			return &types.Float{Value: left.Value - right.Value}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: float - %s\n", right.Type())
+			return &types.Nil{}
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for subtraction: %s\n", left.Type())
+		return &types.Nil{}
 	}
-	if isLeftFloat && isRightFloat {
-		return &types.Float{Value: leftFloat.Value - rightFloat.Value} // Referring to Float from types package
-	}
-	if isLeftInt && isRightFloat {
-		return &types.Float{Value: float64(leftInt.Value) - rightFloat.Value} // Referring to Float from types package
-	}
-	if isLeftFloat && isRightInt {
-		return &types.Float{Value: leftFloat.Value - float64(rightInt.Value)} // Referring to Float from types package
-	}
-
-	// Incompatible types for subtraction
-	fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: %s - %s\n", left.Type(), right.Type())
-	return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 }
 
 // multiply performs multiplication on two values.
-func (vm *VM) multiply(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+func (vm *VM) multiply(left, right types.Value) types.Value { // Ref
+	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform multiplication on nil values\n")
-		return &types.Nil{} // Referring to Nil from types package
+		return &types.Nil{}
 	}
 
-	// Multiplication is typically only defined for numbers.
-	leftInt, isLeftInt := left.(*types.Integer)      // Referring to Integer from types package
-	leftFloat, isLeftFloat := left.(*types.Float)    // Referring to Float from types package
-	rightInt, isRightInt := right.(*types.Integer)   // Referring to Integer from types package
-	rightFloat, isRightFloat := right.(*types.Float) // Referring to Float from types package
-
-	if isLeftInt && isRightInt {
-		return &types.Integer{Value: leftInt.Value * rightInt.Value} // Referring to Integer from types package
+	switch left := left.(type) {
+	case *types.Integer:
+		switch right := right.(type) {
+		case *types.Integer:
+			return &types.Integer{Value: left.Value * right.Value}
+		case *types.Float:
+			return &types.Float{Value: float64(left.Value) * right.Value}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: integer * %s\n", right.Type())
+			return &types.Nil{}
+		}
+	case *types.Float:
+		switch right := right.(type) {
+		case *types.Integer:
+			return &types.Float{Value: left.Value * float64(right.Value)}
+		case *types.Float:
+			return &types.Float{Value: left.Value * right.Value}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: float * %s\n", right.Type())
+			return &types.Nil{}
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for multiplication: %s\n", left.Type())
+		return &types.Nil{}
 	}
-	if isLeftFloat && isRightFloat {
-		return &types.Float{Value: leftFloat.Value * rightFloat.Value} // Referring to Float from types package
-	}
-	if isLeftInt && isRightFloat {
-		return &types.Float{Value: float64(leftInt.Value) * rightFloat.Value} // Referring to Float from types package
-	}
-	if isLeftFloat && isRightInt {
-		return &types.Float{Value: leftFloat.Value * float64(rightInt.Value)} // Referring to Float from types package
-	}
-
-	// Incompatible types for multiplication
-	fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: %s * %s\n", left.Type(), right.Type())
-	return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 }
 
 // divide performs division on two values.
-func (vm *VM) divide(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+func (vm *VM) divide(left, right types.Value) types.Value { // Ref
+	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform division on nil values\n")
-		return &types.Nil{} // Referring to Nil from types package
+		return &types.Nil{}
 	}
 
-	// Division is typically only defined for numbers.
-	leftInt, isLeftInt := left.(*types.Integer)      // Referring to Integer from types package
-	leftFloat, isLeftFloat := left.(*types.Float)    // Referring to Float from types package
-	rightInt, isRightInt := right.(*types.Integer)   // Referring to Integer from types package
-	rightFloat, isRightFloat := right.(*types.Float) // Referring to Float from types package
-
-	// Handle division by zero
-	if (isRightInt && rightInt.Value == 0) || (isRightFloat && rightFloat.Value == 0.0) {
-		fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+	switch left := left.(type) {
+	case *types.Integer:
+		switch right := right.(type) {
+		case *types.Integer:
+			if right.Value == 0 {
+				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Nil{} // Or a specific error value
+			}
+			// Integer division
+			return &types.Integer{Value: left.Value / right.Value}
+		case *types.Float:
+			if right.Value == 0.0 {
+				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Nil{} // Or a specific error value
+			}
+			return &types.Float{Value: float64(left.Value) / right.Value}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: integer / %s\n", right.Type())
+			return &types.Nil{}
+		}
+	case *types.Float:
+		switch right := right.(type) {
+		case *types.Integer:
+			if right.Value == 0 {
+				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Nil{} // Or a specific error value
+			}
+			return &types.Float{Value: left.Value / float64(right.Value)}
+		case *types.Float:
+			if right.Value == 0.0 {
+				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Nil{} // Or a specific error value
+			}
+			return &types.Float{Value: left.Value / right.Value}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: float / %s\n", right.Type())
+			return &types.Nil{}
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for division: %s\n", left.Type())
+		return &types.Nil{}
 	}
-
-	if isLeftInt && isRightInt {
-		// Integer division
-		return &types.Integer{Value: leftInt.Value / rightInt.Value} // Referring to Integer from types package
-	}
-	if isLeftFloat && isRightFloat {
-		return &types.Float{Value: leftFloat.Value / rightFloat.Value} // Referring to Float from types package
-	}
-	if isLeftInt && isRightFloat {
-		return &types.Float{Value: float64(leftInt.Value) / rightFloat.Value} // Referring to Float from types package
-	}
-	if isLeftFloat && isRightInt {
-		return &types.Float{Value: leftFloat.Value / float64(rightInt.Value)} // Referring to Float from types package
-	}
-
-	// Incompatible types for division
-	fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: %s / %s\n", left.Type(), right.Type())
-	return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 }
 
-// modulo performs the modulo operation on two values.
-func (vm *VM) modulo(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+// modulo performs modulo on two values.
+func (vm *VM) modulo(left, right types.Value) types.Value { // Ref
+	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform modulo on nil values\n")
-		return &types.Nil{} // Referring to Nil from types package
+		return &types.Nil{}
 	}
 
-	// Modulo is typically only defined for integers.
-	leftInt, isLeftInt := left.(*types.Integer)    // Referring to Integer from types package
-	rightInt, isRightInt := right.(*types.Integer) // Referring to Integer from types package
+	leftInt, okLeft := left.(*types.Integer)
+	rightInt, okRight := right.(*types.Integer)
 
-	if isLeftInt && isRightInt {
-		// Handle modulo by zero
+	if okLeft && okRight {
 		if rightInt.Value == 0 {
 			fmt.Fprintf(os.Stderr, "runtime error: modulo by zero\n")
-			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+			return &types.Nil{} // Or a specific error value
 		}
-		return &types.Integer{Value: leftInt.Value % rightInt.Value} // Referring to Integer from types package
+		return &types.Integer{Value: leftInt.Value % rightInt.Value}
 	}
 
-	// Incompatible types for modulo
 	fmt.Fprintf(os.Stderr, "runtime error: unsupported types for modulo: %s %% %s\n", left.Type(), right.Type())
-	return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+	return &types.Nil{}
 }
 
-// power performs the power operation (left^right) on two values.
-func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value from types package
-	// Check for nil values
+// power performs exponentiation on two values.
+func (vm *VM) power(left, right types.Value) types.Value { // Ref
+	// Check for nil values first
 	if left == nil || right == nil {
 		fmt.Fprintf(os.Stderr, "runtime error: cannot perform power on nil values\n")
-		return &types.Nil{} // Referring to Nil from types package
+		return &types.Nil{}
 	}
 
-	// Power is typically defined for numbers.
-	leftInt, isLeftInt := left.(*types.Integer)      // Referring to Integer from types package
-	leftFloat, isLeftFloat := left.(*types.Float)    // Referring to Float from types package
-	rightInt, isRightInt := right.(*types.Integer)   // Referring to Integer from types package
-	rightFloat, isRightFloat := right.(*types.Float) // Referring to Float from types package
-
-	if isLeftInt && isRightInt {
-		// Integer power
-		return &types.Integer{Value: int64(math.Pow(float64(leftInt.Value), float64(rightInt.Value)))} // Referring to Integer from types package
+	switch left := left.(type) {
+	case *types.Integer:
+		switch right := right.(type) {
+		case *types.Integer:
+			// Integer power
+			return &types.Integer{Value: int64(math.Pow(float64(left.Value), float64(right.Value)))}
+		case *types.Float:
+			// Float power
+			return &types.Float{Value: math.Pow(float64(left.Value), right.Value)}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: integer ** %s\n", right.Type())
+			return &types.Nil{}
+		}
+	case *types.Float:
+		switch right := right.(type) {
+		case *types.Integer:
+			// Float power
+			return &types.Float{Value: math.Pow(left.Value, float64(right.Value))}
+		case *types.Float:
+			// Float power
+			return &types.Float{Value: math.Pow(left.Value, right.Value)}
+		default:
+			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: float ** %s\n", right.Type())
+			return &types.Nil{}
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for power: %s\n", left.Type())
+		return &types.Nil{}
 	}
-	if isLeftFloat && isRightFloat {
-		return &types.Float{Value: math.Pow(leftFloat.Value, rightFloat.Value)} // Referring to Float from types package
-	}
-	if isLeftInt && isRightFloat {
-		return &types.Float{Value: math.Pow(float64(leftInt.Value), rightFloat.Value)} // Referring to Float from types package
-	}
-	if isLeftFloat && isRightInt {
-		return &types.Float{Value: math.Pow(leftFloat.Value, float64(rightInt.Value))} // Referring to Float from types package
-	}
-
-	// Incompatible types for power
-	fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: %s ^ %s\n", left.Type(), right.Type())
-	return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
 }
 
-// negate performs numerical negation on a value.
-func (vm *VM) negate(operand types.Value) types.Value { // Referring to Value from types package
-	// Check for nil value
+// negate performs negation on a value.
+func (vm *VM) negate(operand types.Value) types.Value { // Ref
 	if operand == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot perform negation on nil value\n")
-		return &types.Nil{} // Referring to Nil from types package
+		fmt.Fprintf(os.Stderr, "runtime error: cannot negate nil value\n")
+		return &types.Nil{}
 	}
 
-	// Negation is typically only defined for numbers.
 	switch operand := operand.(type) {
-	case *types.Integer: // Referring to Integer from types package
-		return &types.Integer{Value: -operand.Value} // Referring to Integer from types package
-	case *types.Float: // Referring to Float from types package
-		return &types.Float{Value: -operand.Value} // Referring to Float from types package
+	case *types.Integer:
+		return &types.Integer{Value: -operand.Value}
+	case *types.Float:
+		return &types.Float{Value: -operand.Value}
 	default:
-		// Unsupported type for negation
 		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for negation: %s\n", operand.Type())
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+		return &types.Nil{}
 	}
 }
 
 // logicalNot performs logical NOT on a value.
-func (vm *VM) logicalNot(operand types.Value) types.Value { // Referring to Value from types package
-	// Check for nil value
-	if operand == nil {
-		// 'not nil' is typically true
-		return &types.Boolean{Value: true} // Referring to Boolean from types package
-	}
+func (vm *VM) logicalNot(operand types.Value) types.Value { // Ref
+	// Nil, false, 0 (int and float), empty string, empty list, empty table are considered falsy.
+	// Everything else is truthy.
+	return &types.Boolean{Value: !isTruthy(operand)} // Ref
+}
 
-	// Logical NOT is typically defined for booleans.
-	// For other types, we can define truthiness rules (e.g., numbers other than 0 are true, non-empty strings/lists/tables are true).
-	// Based on your compiler's OpJumpNotTruthy logic, it seems you have a concept of truthiness.
-	// Let's use the isTruthy helper here.
-	return &types.Boolean{Value: !isTruthy(operand)} // Referring to Boolean from types package
+// isTruthy checks if a value is considered truthy.
+func isTruthy(obj types.Value) bool { // Ref
+	switch obj := obj.(type) {
+	case *types.Boolean:
+		return obj.Value
+	case *types.Nil:
+		return false
+	case *types.Integer:
+		return obj.Value != 0
+	case *types.Float:
+		return obj.Value != 0.0
+	case *types.String:
+		return obj.Value != ""
+	case *types.List:
+		return len(obj.Elements) > 0
+	case *types.Table:
+		// Check if the table has any pairs (keys)
+		return len(obj.Pairs) > 0 // Check the Pairs slice length
+	default:
+		// Other types are considered truthy by default (e.g., functions, closures)
+		return true
+	}
 }
 
 // equal checks for equality between two values.
-func (vm *VM) equal(left, right types.Value) types.Value { // Referring to Value from types package
+func (vm *VM) equal(left, right types.Value) types.Value { // Ref
 	// Use the Equals method defined on the Value interface.
-	// Handle nil comparisons explicitly.
-	if left == nil && right == nil {
-		return &types.Boolean{Value: true} // Referring to Boolean from types package
-	}
-	if left == nil || right == nil {
-		return &types.Boolean{Value: false} // Referring to Boolean from types package
-	}
-	return &types.Boolean{Value: left.Equals(right)} // Referring to Boolean from types package
+	// This allows each type to define its own equality logic.
+	return &types.Boolean{Value: left.Equals(right)} // Ref
 }
 
 // notEqual checks for inequality between two values.
-func (vm *VM) notEqual(left, right types.Value) types.Value { // Referring to Value from types package
+func (vm *VM) notEqual(left, right types.Value) types.Value { // Ref
 	// Use the Equals method and negate the result.
-	if left == nil && right == nil {
-		return &types.Boolean{Value: false} // Referring to Boolean from types package
-	}
-	if left == nil || right == nil {
-		return &types.Boolean{Value: true} // Referring to Boolean from types package
-	}
-	return &types.Boolean{Value: !left.Equals(right)} // Referring to Boolean from types package
+	return &types.Boolean{Value: !left.Equals(right)} // Ref
 }
 
-// greaterThan checks if left is greater than right.
-func (vm *VM) greaterThan(left, right types.Value) types.Value { // Referring to Value from types package
-	// Use the Compare method defined on the Value interface.
-	// Handle nil comparisons.
-	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
-	}
-	comparison, err := left.Compare(right)
+// greaterThan checks if the left value is greater than the right value.
+func (vm *VM) greaterThan(left, right types.Value) types.Value { // Ref
+	// Use the Compare method.
+	cmp, err := left.Compare(right)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+		return &types.Nil{} // Or a specific error value
 	}
-	return &types.Boolean{Value: comparison > 0} // Referring to Boolean from types package
+	return &types.Boolean{Value: cmp > 0} // Ref
 }
 
-// lessThan checks if left is less than right.
-func (vm *VM) lessThan(left, right types.Value) types.Value { // Referring to Value from types package
-	// Use the Compare method defined on the Value interface.
-	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
-	}
-	comparison, err := left.Compare(right)
+// lessThan checks if the left value is less than the right value.
+func (vm *VM) lessThan(left, right types.Value) types.Value { // Ref
+	// Use the Compare method.
+	cmp, err := left.Compare(right)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+		return &types.Nil{} // Or a specific error value
 	}
-	return &types.Boolean{Value: comparison < 0} // Referring to Boolean from types package
+	return &types.Boolean{Value: cmp < 0} // Ref
 }
 
-// greaterEqual checks if left is greater than or equal to right.
-func (vm *VM) greaterEqual(left, right types.Value) types.Value { // Referring to Value from types package
-	// Use the Compare method defined on the Value interface.
-	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
-	}
-	comparison, err := left.Compare(right)
+// greaterEqual checks if the left value is greater than or equal to the right value.
+func (vm *VM) greaterEqual(left, right types.Value) types.Value { // Ref
+	// Use the Compare method.
+	cmp, err := left.Compare(right)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+		return &types.Nil{} // Or a specific error value
 	}
-	return &types.Boolean{Value: comparison >= 0} // Referring to Boolean from types package
+	return &types.Boolean{Value: cmp >= 0} // Ref
 }
 
-// lessEqual checks if left is less than or equal to right.
-func (vm *VM) lessEqual(left, right types.Value) types.Value { // Referring to Value from types package
-	// Use the Compare method defined on the Value interface.
-	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot compare nil values\n")
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
-	}
-	comparison, err := left.Compare(right)
+// lessEqual checks if the left value is less than or equal to the right value.
+func (vm *VM) lessEqual(left, right types.Value) types.Value { // Ref
+	// Use the Compare method.
+	cmp, err := left.Compare(right)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+		return &types.Nil{} // Or a specific error value
 	}
-	return &types.Boolean{Value: comparison <= 0} // Referring to Boolean from types package
-}
-
-// isTruthy determines the truthiness of a value.
-// This is used for conditional jumps (OpJumpNotTruthy, OpJumpTruthy).
-func isTruthy(obj types.Value) bool { // Referring to Value from types package
-	if obj == nil {
-		return false // nil is falsy
-	}
-	switch obj := obj.(type) {
-	case *types.Boolean: // Referring to Boolean from types package
-		return obj.Value // Boolean value itself
-	case *types.Nil: // Referring to Nil from types package
-		return false // Nil is falsy
-	case *types.Integer: // Referring to Integer from types package
-		return obj.Value != 0 // Integers are truthy if non-zero
-	case *types.Float: // Referring to Float from types package
-		return obj.Value != 0.0 // Floats are truthy if non-zero
-	case *types.String: // Referring to String from types package
-		return len(obj.Value) > 0 // Strings are truthy if non-empty
-	case *types.List: // Referring to List from types package
-		return len(obj.Elements) > 0 // Lists are truthy if non-empty
-	case *types.Table: // Referring to Table from types package
-		return len(obj.Fields) > 0 // Tables are truthy if non-empty
-	case *types.CompiledFunction: // Referring to CompiledFunction from types package
-		return true // Functions are truthy
-	case *types.Closure: // Referring to Closure from types package
-		return true // Closures are truthy
-	case types.Iterator: // Referring to Iterator from types package
-		// Iterators are typically truthy as long as they haven't finished iteration.
-		// This might require a method on the Iterator interface to check if it's done.
-		// For now, let's assume iterators are always truthy if they exist.
-		return true
-	case *types.Error: // Referring to Error from types package
-		return false // Errors are typically falsy
-	default:
-		// Default to falsy for unknown types, or error depending on language design.
-		return false
-	}
+	return &types.Boolean{Value: cmp <= 0} // Ref
 }

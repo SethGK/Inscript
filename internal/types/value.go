@@ -315,68 +315,135 @@ func (l *List) SetIndex(index Value, val Value) error {
 // NewList helper
 func NewList(elements ...Value) *List { return &List{Elements: elements} }
 
-// Table value (using Go map for simplicity for now)
+// --- Changes for Ordered Table Start ---
+
+// TablePair represents a single key-value pair within an ordered Table.
+type TablePair struct {
+	Key   string // Table keys are assumed to be strings
+	Value Value
+}
+
+// Table value - Now stores pairs in order of insertion.
 type Table struct { // Defined in the types package
-	Fields map[string]Value // Using string keys for simplicity based on AST
+	// Pairs stores the key-value pairs in the order they were added.
+	Pairs []TablePair
+	// Lookup provides O(1) average time complexity for accessing values by key.
+	// It maps the key string to the index of the pair in the Pairs slice.
+	Lookup map[string]int // Changed to uppercase 'L' to be exported
 }
 
 func (t *Table) Type() Type { return TABLE_OBJ }
+
+// Inspect iterates over the ordered Pairs slice for consistent output.
 func (t *Table) Inspect() string {
 	var fields []string
-	for key, val := range t.Fields {
-		fields = append(fields, fmt.Sprintf("%s: %s", key, val.Inspect()))
+	// Iterate over the ordered slice instead of the unordered map
+	for _, pair := range t.Pairs {
+		fields = append(fields, fmt.Sprintf("%s: %s", pair.Key, pair.Value.Inspect()))
 	}
-	// Sort keys for consistent output (optional but good for testing)
-	// keys := make([]string, 0, len(t.Fields))
-	// for k := range t.Fields { keys = append(keys, k) }
-	// sort.Strings(keys)
-	// var sortedFields []string
-	// for _, k := range keys { sortedFields = append(sortedFields, fmt.Sprintf("%s: %s", k, t.Fields[k].Inspect())) }
-	// return "{" + strings.Join(sortedFields, ", ") + "}"
-	return "{" + strings.Join(fields, ", ") + "}" // Unsorted for now
+	return "{" + strings.Join(fields, ", ") + "}"
 }
+
+// Equals compares two Tables based on the order of their pairs.
 func (t *Table) Equals(other Value) bool {
 	o, ok := other.(*Table)
 	if !ok {
 		return false
 	}
-	if len(t.Fields) != len(o.Fields) {
+	// Compare lengths of the ordered slices
+	if len(t.Pairs) != len(o.Pairs) {
 		return false
 	}
-	for key, val := range t.Fields {
-		otherVal, ok := o.Fields[key]
-		if !ok || !val.Equals(otherVal) {
+	// Compare each pair in order
+	for i := range t.Pairs {
+		if t.Pairs[i].Key != o.Pairs[i].Key || !t.Pairs[i].Value.Equals(o.Pairs[i].Value) {
 			return false
 		}
 	}
 	return true
 }
+
 func (t *Table) Compare(other Value) (int, error) {
 	return 0, fmt.Errorf("comparison not supported for Table")
 }
-func (t *Table) GetIterator() (Iterator, error) { return NewTableIterator(t), nil } // Table is iterable (iterates over keys or key-value pairs)
+
+// GetIterator returns a TableIterator that iterates over the ordered keys.
+func (t *Table) GetIterator() (Iterator, error) { return NewTableIterator(t), nil } // Table is iterable (iterates over keys in order)
+
+// GetIndex retrieves a value by key using the Lookup map for efficiency.
 func (t *Table) GetIndex(index Value) (Value, error) {
 	keyStr, ok := index.(*String) // Assuming table keys are strings
 	if !ok {
 		return nil, fmt.Errorf("table index must be a string, got %s", index.Type())
 	}
-	val, ok := t.Fields[keyStr.Value]
-	if !ok {
-		return &Nil{}, nil
-	} // Return nil for non-existent keys
-	return val, nil
+
+	// Use the Lookup map for O(1) average time complexity access
+	if t.Lookup != nil { // Changed to uppercase 'L'
+		if idx, found := t.Lookup[keyStr.Value]; found { // Changed to uppercase 'L'
+			return t.Pairs[idx].Value, nil
+		}
+	} else {
+		// Fallback to linear scan if Lookup map is not initialized (less efficient)
+		for _, pair := range t.Pairs {
+			if pair.Key == keyStr.Value {
+				return pair.Value, nil
+			}
+		}
+	}
+
+	// Return nil for non-existent keys
+	return &Nil{}, nil
 }
+
+// SetIndex sets or adds a value by key, maintaining insertion order.
 func (t *Table) SetIndex(index Value, val Value) error {
 	keyStr, ok := index.(*String) // Assuming table keys are strings
 	if !ok {
 		return fmt.Errorf("table index must be a string, got %s", index.Type())
 	}
-	t.Fields[keyStr.Value] = val
+
+	key := keyStr.Value
+
+	// Check if the key already exists using the Lookup map
+	if t.Lookup != nil { // Changed to uppercase 'L'
+		if idx, found := t.Lookup[key]; found { // Changed to uppercase 'L'
+			t.Pairs[idx].Value = val // Update existing value in the ordered slice
+			return nil
+		}
+	} else {
+		// Fallback to linear scan if Lookup map is not initialized (less efficient)
+		for i, pair := range t.Pairs {
+			if pair.Key == key {
+				t.Pairs[i].Value = val // Update existing value
+				return nil
+			}
+		}
+	}
+
+	// If the key does not exist, append a new pair to the end (maintains insertion order)
+	t.Pairs = append(t.Pairs, TablePair{Key: key, Value: val})
+	// If using a Lookup map, add the new key and its index
+	if t.Lookup != nil { // Changed to uppercase 'L'
+		t.Lookup[key] = len(t.Pairs) - 1 // Changed to uppercase 'L'
+	}
+
 	return nil
 }
 
-// NewTable helper
-func NewTable(fields map[string]Value) *Table { return &Table{Fields: fields} }
+// NewTable helper - Now takes a slice of TablePair to create an ordered table.
+// Note: If you still need to convert from a map, you would need a different helper
+// that accepts a map and defines an ordering (e.g., by sorting keys).
+// This helper is intended for creating tables where the order is known at creation.
+func NewTable(pairs []TablePair) *Table {
+	// Initialize the Lookup map
+	lookup := make(map[string]int, len(pairs))
+	for i, pair := range pairs {
+		lookup[pair.Key] = i
+	}
+	return &Table{Pairs: pairs, Lookup: lookup} // Changed to uppercase 'L'
+}
+
+// --- Changes for Ordered Table End ---
 
 // StringIterator for iterating over strings
 type StringIterator struct {
@@ -438,22 +505,18 @@ func (li *ListIterator) Next() (Value, bool, error) {
 	return value, true, nil // Return the list element
 }
 
-// TableIterator for iterating over tables (iterates over keys)
+// TableIterator for iterating over tables (iterates over keys in order)
 type TableIterator struct {
 	table *Table
-	keys  []string
-	index int
+	index int // Current index in the table's Pairs slice
 }
 
+// NewTableIterator creates a new iterator iterating over the ordered pairs.
 func NewTableIterator(t *Table) *TableIterator {
-	keys := make([]string, 0, len(t.Fields))
-	for k := range t.Fields {
-		keys = append(keys, k)
-	}
-	// Optionally sort keys for deterministic iteration order
-	// sort.Strings(keys)
-	return &TableIterator{table: t, keys: keys, index: 0}
+	// The iterator now directly uses the ordered Pairs slice.
+	return &TableIterator{table: t, index: 0}
 }
+
 func (ti *TableIterator) Type() Type              { return ITERATOR_OBJ } // Iterators have a type
 func (ti *TableIterator) Inspect() string         { return fmt.Sprintf("<table iterator at %p>", ti) }
 func (ti *TableIterator) Equals(other Value) bool { return ti == other } // Identity equality
@@ -469,15 +532,15 @@ func (ti *TableIterator) SetIndex(index Value, val Value) error {
 } // Implement SetIndex
 
 func (ti *TableIterator) Next() (Value, bool, error) {
-	if ti.index >= len(ti.keys) {
+	// Iterate through the ordered Pairs slice
+	if ti.index >= len(ti.table.Pairs) {
 		return &Nil{}, false, nil // Iteration is done
 	}
-	key := ti.keys[ti.index]
+	// Return the key of the current pair in order
+	key := ti.table.Pairs[ti.index].Key
 	ti.index++
 	return &String{Value: key}, true, nil // Return the key as a string value
-	// You could also return a pair of key-value or a custom entry type if needed
-	// value := ti.table.Fields[key]
-	// return NewTableEntry(key, value), true, nil // Example if you had a TableEntry type
+	// If you wanted to iterate over values or pairs, you would return those here instead.
 }
 
 // Error value for runtime errors
