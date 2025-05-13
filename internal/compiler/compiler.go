@@ -223,15 +223,15 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		c.emit(OpPop) // Use OpPop
 
 	case *ast.AssignStmt:
-		// Compile the value expression first. It leaves the value on the stack.
-		if err := c.compileExpression(stmt.Value); err != nil {
-			return err
-		}
-
 		// Handle the assignment target based on its type.
 		switch target := stmt.Target.(type) {
 		case *ast.Identifier:
 			// Assignment to a variable (identifier).
+			// Compile the value expression first. It leaves the value on the stack.
+			if err := c.compileExpression(stmt.Value); err != nil {
+				return err
+			}
+
 			// Look up the symbol in the current and outer scopes.
 			symbol, ok := c.currentScope.Resolve(target.Name)
 			if !ok {
@@ -271,18 +271,28 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 
 		case *ast.IndexExpr:
 			// Assignment to an indexed element (e.g., `my_list[index] = value`).
-			// The value is already on the stack from compiling stmt.Value.
-			// Compile the aggregate (e.g., `my_list`). This leaves the aggregate on the stack below the value.
+			// The required stack order for OpSetIndex is [..., aggregate, index, value].
+
+			// 1. Compile the aggregate expression (e.g., `my_list`).
+			// This pushes the aggregate object onto the stack.
 			if err := c.compileExpression(target.Primary); err != nil {
 				return err
 			}
-			// Compile the index expression (e.g., integer for list, string/value for table). Leaves index on stack.
+
+			// 2. Compile the index expression (e.g., integer for list, string/value for table).
+			// This pushes the index value onto the stack.
 			if err := c.compileExpression(target.Index); err != nil {
 				return err
 			}
-			// Stack top is now [..., aggregate, index, value].
-			// Emit OpSetIndex. The VM should pop value, index, aggregate, perform the set operation,
-			// and typically push the updated aggregate back onto the stack (or the assigned value, depending on language semantics).
+
+			// 3. Compile the value expression (the value to be assigned).
+			// This pushes the value onto the stack.
+			if err := c.compileExpression(stmt.Value); err != nil { // Compile stmt.Value LAST
+				return err
+			}
+
+			// Stack top is now [..., aggregate, index, value]. Correct order for OpSetIndex.
+			// Emit OpSetIndex. The VM should pop value, index, aggregate, and perform the assignment.
 			c.emit(OpSetIndex) // Use OpSetIndex
 
 		// Add cases for other potential assignment targets if your grammar supports them,
@@ -391,7 +401,6 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 
 		return nil // Successfully compiled the function literal statement (it's a statement that compiles an expression)
 
-	// ... rest of compileStatement cases ...
 	default:
 		// This case should ideally not be reached.
 		return fmt.Errorf("unsupported statement type: %T", s)
