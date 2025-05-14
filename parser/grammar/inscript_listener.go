@@ -68,18 +68,6 @@ type InscriptListener interface {
 	// EnterExpressionOpt is called when entering the expressionOpt production.
 	EnterExpressionOpt(c *ExpressionOptContext)
 
-	// EnterExpressionListOpt is called when entering the expressionListOpt production.
-	EnterExpressionListOpt(c *ExpressionListOptContext)
-
-	// EnterExpressionList is called when entering the expressionList production.
-	EnterExpressionList(c *ExpressionListContext)
-
-	// EnterParamListOpt is called when entering the paramListOpt production.
-	EnterParamListOpt(c *ParamListOptContext)
-
-	// EnterParamList is called when entering the paramList production.
-	EnterParamList(c *ParamListContext)
-
 	// EnterExpression is called when entering the expression production.
 	EnterExpression(c *ExpressionContext)
 
@@ -110,6 +98,9 @@ type InscriptListener interface {
 	// EnterAtom is called when entering the atom production.
 	EnterAtom(c *AtomContext)
 
+	// EnterFnLiteral is called when entering the fnLiteral production.
+	EnterFnLiteral(c *FnLiteralContext)
+
 	// EnterListLiteral is called when entering the listLiteral production.
 	EnterListLiteral(c *ListLiteralContext)
 
@@ -127,6 +118,18 @@ type InscriptListener interface {
 
 	// EnterLiteral is called when entering the literal production.
 	EnterLiteral(c *LiteralContext)
+
+	// EnterParamListOpt is called when entering the paramListOpt production.
+	EnterParamListOpt(c *ParamListOptContext)
+
+	// EnterParamList is called when entering the paramList production.
+	EnterParamList(c *ParamListContext)
+
+	// EnterExpressionListOpt is called when entering the expressionListOpt production.
+	EnterExpressionListOpt(c *ExpressionListOptContext)
+
+	// EnterExpressionList is called when entering the expressionList production.
+	EnterExpressionList(c *ExpressionListContext)
 
 	// ExitProgram is called when exiting the program production.
 	ExitProgram(c *ProgramContext)
@@ -188,18 +191,6 @@ type InscriptListener interface {
 	// ExitExpressionOpt is called when exiting the expressionOpt production.
 	ExitExpressionOpt(c *ExpressionOptContext)
 
-	// ExitExpressionListOpt is called when exiting the expressionListOpt production.
-	ExitExpressionListOpt(c *ExpressionListOptContext)
-
-	// ExitExpressionList is called when exiting the expressionList production.
-	ExitExpressionList(c *ExpressionListContext)
-
-	// ExitParamListOpt is called when exiting the paramListOpt production.
-	ExitParamListOpt(c *ParamListOptContext)
-
-	// ExitParamList is called when exiting the paramList production.
-	ExitParamList(c *ParamListContext)
-
 	// ExitExpression is called when exiting the expression production.
 	ExitExpression(c *ExpressionContext)
 
@@ -230,6 +221,9 @@ type InscriptListener interface {
 	// ExitAtom is called when exiting the atom production.
 	ExitAtom(c *AtomContext)
 
+	// ExitFnLiteral is called when exiting the fnLiteral production.
+	ExitFnLiteral(c *FnLiteralContext)
+
 	// ExitListLiteral is called when exiting the listLiteral production.
 	ExitListLiteral(c *ListLiteralContext)
 
@@ -247,4 +241,16 @@ type InscriptListener interface {
 
 	// ExitLiteral is called when exiting the literal production.
 	ExitLiteral(c *LiteralContext)
+
+	// ExitParamListOpt is called when exiting the paramListOpt production.
+	ExitParamListOpt(c *ParamListOptContext)
+
+	// ExitParamList is called when exiting the paramList production.
+	ExitParamList(c *ParamListContext)
+
+	// ExitExpressionListOpt is called when exiting the expressionListOpt production.
+	ExitExpressionListOpt(c *ExpressionListOptContext)
+
+	// ExitExpressionList is called when exiting the expressionList production.
+	ExitExpressionList(c *ExpressionListContext)
 }

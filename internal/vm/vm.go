@@ -1,7 +1,9 @@
-package vm // Package vm, as it's in the internal/vm directory
+// Package vm, as it's in the internal/vm directory
+package vm
 
 import (
 	// Needed for binary encoding/decoding (e.g., ReadUint16/Uint8)
+	"encoding/binary" // Added binary import
 	"fmt"
 	"io"
 	"math" // Needed for math.Pow in the power function
@@ -50,6 +52,11 @@ func NewFrame(closure *types.Closure, basePointer int) *Frame {
 	// This is stored in the CompiledFunction.NumLocals.
 	// The locals slice holds the parameters and declared local variables.
 	locals := make([]types.Value, closure.Fn.NumLocals)
+
+	// --- Debug Print: NewFrame ---
+	// Use Inspect() instead of String() on closure.Fn
+	fmt.Printf("DEBUG (NewFrame): Created frame for %s. NumLocals: %d, locals slice length: %d\n", closure.Fn.Inspect(), closure.Fn.NumLocals, len(locals))
+	// --- End Debug Print ---
 
 	// Arguments are copied into the beginning of the locals slice in the VM's OpCall case.
 	// The NewFrame function just creates the frame structure with the correct locals slice size.
@@ -138,8 +145,9 @@ func (vm *VM) push(obj types.Value) { // Takes Value from types package
 	// --- Debug Print: Push ---
 	// Get the current frame's base pointer for context
 	currentBasePtr := 0
-	if vm.framesIndex > 0 {
-		currentBasePtr = vm.currentFrame().basePointer
+	currentFrame := vm.currentFrame()              // Get current frame
+	if vm.framesIndex > 0 && currentFrame != nil { // Add nil check for currentFrame
+		currentBasePtr = currentFrame.basePointer
 	}
 	fmt.Printf("DEBUG (Push): Pushing %s at index %d (sp before: %d, basePtr: %d)\n", obj.Inspect(), vm.sp, vm.sp, currentBasePtr)
 	// --- End Debug Print ---
@@ -159,8 +167,9 @@ func (vm *VM) pop() types.Value { // Returning Value from types package
 	// --- Debug Print: Pop ---
 	// Get the current frame's base pointer for context
 	currentBasePtr := 0
-	if vm.framesIndex > 0 {
-		currentBasePtr = vm.currentFrame().basePointer
+	currentFrame := vm.currentFrame()              // Get current frame
+	if vm.framesIndex > 0 && currentFrame != nil { // Add nil check for currentFrame
+		currentBasePtr = currentFrame.basePointer
 	}
 	fmt.Printf("DEBUG (Pop): Popped %s from index %d (sp after: %d, basePtr: %d)\n", obj.Inspect(), vm.sp, vm.sp, currentBasePtr)
 	// --- End Debug Print ---
@@ -178,7 +187,14 @@ func (vm *VM) Run() error {
 	// The main program's frame is the first one.
 	for vm.framesIndex > 0 {
 		currentFrame = vm.currentFrame()
+		// --- Debug Print: Start of Run loop iteration ---
+		fmt.Printf("DEBUG (Run Loop): Start of iteration. framesIndex: %d, currentFrame basePtr: %d, currentFrame locals length: %d\n", vm.framesIndex, currentFrame.basePointer, len(currentFrame.locals))
+		// --- End Debug Print ---
+
 		instructions = currentFrame.Instructions() // This returns compiler.Instructions
+		// --- Debug Print: Instructions slice for current frame ---
+		fmt.Printf("DEBUG (Run Loop): Current Frame Instructions: %v\n", instructions)
+		// --- End Debug Print ---
 
 		// Increment the instruction pointer before fetching the opcode,
 		// so ip points to the *current* instruction being executed.
@@ -210,186 +226,178 @@ func (vm *VM) Run() error {
 			break // Exit the loop if main frame finishes
 		}
 
+		// --- Debug Print: Raw Instruction Bytes ---
+		// Print the byte at the current ip and the next few bytes
+		bytesToPrint := 5 // Adjust as needed
+		endIndex := ip + bytesToPrint
+		if endIndex > len(instructions) {
+			endIndex = len(instructions)
+		}
+		fmt.Printf("DEBUG (Run Loop): Raw bytes at ip %d: %v\n", ip, instructions[ip:endIndex])
+		// --- End Debug Print ---
+
 		opcode := compiler.OpCode(instructions[ip]) // Using compiler.OpCode (from compiler package)
+		// --- Debug Print: Fetched Opcode ---
+		fmt.Printf("DEBUG (Run Loop): Fetched opcode: %v (int: %d) at ip %d\n", opcode, int(opcode), ip)
+		// --- End Debug Print ---
 
-		switch opcode {
-		case compiler.OpConstant: // Using compiler.OpConstant (from compiler package)
+		// Get the instruction definition to determine operand widths
+		def, ok := compiler.Lookup(opcode)
+		if !ok {
+			return fmt.Errorf("runtime error: unknown opcode: %v at %d", opcode, ip)
+		}
+
+		// Calculate the size of the current instruction (opcode + operands)
+		instructionSize := 1 // Opcode size
+		for _, width := range def.OperandWidths {
+			instructionSize += width
+		}
+
+		// Ensure there are enough bytes remaining for the instruction and its operands
+		if ip+instructionSize > len(instructions) {
+			return fmt.Errorf("runtime error: incomplete instruction at %d. Expected %d bytes, but only %d remaining", ip, instructionSize, len(instructions)-ip)
+		}
+
+		// --- Debug Print: Opcode value before dispatch ---
+		fmt.Printf("DEBUG (Run Loop): Opcode value before dispatch: %d\n", int(opcode))
+		// --- End Debug Print ---
+
+		// Using if-else if for opcode dispatch
+		if opcode == compiler.OpConstant {
 			// Operand is the index of the constant in the constant pool.
-			constantIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
+			constantIndex := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
 			vm.push(vm.constants[constantIndex])
-			currentFrame.ip += 2 // Operand (2 bytes for uint16)
-
-		case compiler.OpAdd: // Using compiler.OpAdd (from compiler package)
+		} else if opcode == compiler.OpAdd {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.add(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpSub: // Using compiler.OpSub (from compiler package)
+		} else if opcode == compiler.OpSub {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.subtract(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpMul: // Using compiler.OpMul (from compiler package)
+		} else if opcode == compiler.OpMul {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.multiply(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpDiv: // Using compiler.OpDiv (from compiler package)
+		} else if opcode == compiler.OpDiv {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.divide(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpMod: // Using compiler.OpMod (from compiler package)
+		} else if opcode == compiler.OpMod {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.modulo(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpPow: // Using compiler.OpPow (from compiler package)
+		} else if opcode == compiler.OpPow {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.power(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpMinus: // Using compiler.OpMinus (from compiler package)
+		} else if opcode == compiler.OpMinus {
 			operand := vm.pop()
 			result := vm.negate(operand)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpNot: // Using compiler.OpNot (from compiler package)
+		} else if opcode == compiler.OpNot {
 			operand := vm.pop()
 			result := vm.logicalNot(operand)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpEqual: // Using compiler.OpEqual (from compiler package)
+		} else if opcode == compiler.OpEqual {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.equal(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpNotEqual: // Using compiler.OpNotEqual (from compiler package)
+		} else if opcode == compiler.OpNotEqual {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.notEqual(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpGreaterThan: // Using compiler.OpGreaterThan (from compiler package)
+		} else if opcode == compiler.OpGreaterThan {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.greaterThan(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpLessThan: // Using compiler.OpLessThan (from compiler package)
+		} else if opcode == compiler.OpLessThan {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.lessThan(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpGreaterEqual: // Using compiler.OpGreaterEqual (from compiler package)
+		} else if opcode == compiler.OpGreaterEqual {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.greaterEqual(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpLessEqual: // Using compiler.OpLessEqual (from compiler package)
+		} else if opcode == compiler.OpLessEqual {
 			right := vm.pop()
 			left := vm.pop()
 			result := vm.lessEqual(left, right)
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpTrue: // Using compiler.OpTrue (from compiler package)
+		} else if opcode == compiler.OpTrue {
 			vm.push(&types.Boolean{Value: true}) // Referring to Boolean from types package
-			// ip already incremented by the loop
-
-		case compiler.OpFalse: // Using compiler.OpFalse (from compiler package)
+		} else if opcode == compiler.OpFalse {
 			vm.push(&types.Boolean{Value: false}) // Referring to Boolean from types package
-			// ip already incremented by the loop
-
-		case compiler.OpNull: // Using compiler.OpNull (from compiler package)
+		} else if opcode == compiler.OpNull {
 			vm.push(&types.Nil{}) // Referring to Nil from types package
-			// ip already incremented by the loop
-
-		case compiler.OpPop: // Using compiler.OpPop (from compiler package)
+		} else if opcode == compiler.OpPop {
 			vm.pop()
-			// ip already incremented by the loop
-
-		case compiler.OpSetGlobal: // Using compiler.OpSetGlobal (from compiler package)
-			globalIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
+		} else if opcode == compiler.OpSetGlobal {
+			globalIndex := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
 			vm.globals[globalIndex] = vm.pop()
-			currentFrame.ip += 2 // Operand (2 bytes for uint16)
-
-		case compiler.OpGetGlobal: // Using compiler.OpGetGlobal (from compiler package)
-			globalIndex := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
+		} else if opcode == compiler.OpGetGlobal {
+			globalIndex := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
 			// Check if the global index is within the bounds of the globals slice
 			if int(globalIndex) >= len(vm.globals) {
 				return fmt.Errorf("runtime error: global variable index out of bounds: %d (max %d)", globalIndex, len(vm.globals)-1)
 			}
-			vm.push(vm.globals[globalIndex]) // This was the line causing the panic
-			currentFrame.ip += 2             // Operand (2 bytes for uint16)
-
-		case compiler.OpSetLocal: // Using compiler.OpSetLocal (from compiler package)
+			vm.push(vm.globals[globalIndex])
+		} else if opcode == compiler.OpSetLocal {
 			// Operand for local index is 1 byte (uint8)
-			localIndex := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
-			currentFrame.ip += 1                                  // Operand (1 byte for uint8)
+			localIndex := instructions[ip+1] // Read uint8 directly
 			// Locals are stored in the current frame's locals array.
 			// The operand is the index within that array.
 			// Check if the local index is within the bounds of the frame's locals slice
 			if int(localIndex) >= len(currentFrame.locals) {
 				return fmt.Errorf("runtime error: local variable index out of bounds: %d (max %d)", localIndex, len(currentFrame.locals)-1)
 			}
-			// Pop from the main stack and store in the frame's locals slice
-			currentFrame.locals[localIndex] = vm.pop()
-
-		case compiler.OpGetLocal: // Using compiler.OpGetLocal (from compiler package)
+			valueToSet := vm.pop()
+			currentFrame.locals[localIndex] = valueToSet
+		} else if opcode == compiler.OpGetLocal {
 			// Operand for local index is 1 byte (uint8)
-			localIndex := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
-			currentFrame.ip += 1                                  // Operand (1 byte for uint8)
+			localIndex := instructions[ip+1] // Read uint8 directly
 			// Get the local variable from the current frame's locals array.
+			// *** Debug Print: OpGetLocal ***
+			fmt.Printf("DEBUG (OpGetLocal): Accessing local index %d. currentFrame.locals length: %d\n", localIndex, len(currentFrame.locals))
+			// *** End Debug Print ---
 			// Check if the local index is within the bounds of the frame's locals slice
 			if int(localIndex) >= len(currentFrame.locals) {
 				return fmt.Errorf("runtime error: local variable index out of bounds: %d (max %d)", localIndex, len(currentFrame.locals)-1)
 			}
 			// Push from the frame's locals slice onto the main stack
 			vm.push(currentFrame.locals[localIndex])
-
-			// --- Closure support opcodes ---
-
-		case compiler.OpGetFree:
+		} else if opcode == compiler.OpGetFree {
+			// --- Debug Print: OpGetFree Entered ---
+			fmt.Printf("DEBUG (OpGetFree): Entered OpGetFree case at ip %d. Opcode value inside case: %d\n", ip, int(opcode))
+			// --- End Debug Print ---
 			// Operand is a single-byte index into the current closure's Free slice
-			freeIndex := compiler.ReadUint8(instructions[ip+1:])
-			currentFrame.ip += 1
+			freeIndex := instructions[ip+1] // Read uint8 directly
 			// Push the captured free variable onto the stack
+			if int(freeIndex) >= len(currentFrame.closure.Free) {
+				return fmt.Errorf("runtime error: free variable index out of bounds: %d (max %d)", freeIndex, len(currentFrame.closure.Free)-1)
+			}
 			vm.push(currentFrame.closure.Free[freeIndex])
-
-		case compiler.OpClosure:
+		} else if opcode == compiler.OpClosure {
 			// Operands: 2‑byte constant pool index, then 1‑byte free count
-			constIndex := compiler.ReadUint16(instructions[ip+1:])
-			freeCount := int(compiler.ReadUint8(instructions[ip+3:]))
-			currentFrame.ip += 3
+			constIndex := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
+			freeCount := int(instructions[ip+3])                       // Read uint8 directly
 
 			// Look up the compiled function
 			fnVal := vm.constants[constIndex]
 			compiledFn, ok := fnVal.(*types.CompiledFunction)
 			if !ok {
-				return fmt.Errorf("runtime error: constant %d is not a CompiledFunction", constIndex)
+				return fmt.Errorf("runtime error: constant %d is not a CompiledFunction, got %s", constIndex, fnVal.Type())
 			}
 
 			// Pop freeCount values from the stack (in reverse order) to capture
@@ -401,20 +409,16 @@ func (vm *VM) Run() error {
 			// Build and push the closure
 			clo := &types.Closure{Fn: compiledFn, Free: frees}
 			vm.push(clo)
-
-		case compiler.OpArray: // Using compiler.OpArray (from compiler package)
-			numElements := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                                    // Operand (2 bytes for uint16)
+		} else if opcode == compiler.OpArray {
+			numElements := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
 			// Elements are on the stack, pop them in reverse order to build the list
 			elements := make([]types.Value, numElements) // Referring to Value from types package
 			for i := int(numElements) - 1; i >= 0; i-- {
 				elements[i] = vm.pop()
 			}
 			vm.push(&types.List{Elements: elements}) // Referring to List from types package
-
-		case compiler.OpHash:
-			numPairs := compiler.ReadUint16(instructions[ip+1:])
-			currentFrame.ip += 2
+		} else if opcode == compiler.OpHash {
+			numPairs := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
 
 			// Elements are on the stack in reverse order (valueN, keyN, ... value1, key1)
 			// We need to pop them and store them to build the ordered list.
@@ -431,7 +435,8 @@ func (vm *VM) Run() error {
 
 			// Now build the ordered structure for the Table from the popped pairs in the correct order (key1, value1, ...)
 			orderedPairs := make([]types.TablePair, numPairs) // Use the new TablePair struct
-			lookupMap := make(map[string]int, numPairs)
+			// lookupMap is not needed here in the VM, only in the Table type itself.
+			// lookupMap := make(map[string]int, numPairs)
 
 			// Iterate through the popped pairs in their original compilation order (key1, value1, ...)
 			for i := 0; i < int(numPairs); i++ {
@@ -440,14 +445,13 @@ func (vm *VM) Run() error {
 					return fmt.Errorf("runtime error: hash key must be a string, got %s", poppedPairs[i].Key.Type())
 				}
 				orderedPairs[i] = types.TablePair{Key: keyStr.Value, Value: poppedPairs[i].Value}
-				lookupMap[keyStr.Value] = i // Store index for Lookup
+				// lookupMap[keyStr.Value] = i // Store index for Lookup
 			}
 
 			// Push the new Table with the ordered structure.
 			// Use the NewTable helper which handles initializing the Lookup map correctly.
 			vm.push(types.NewTable(orderedPairs)) // Use the NewTable helper
-
-		case compiler.OpIndex: // Using compiler.OpIndex (from compiler package)
+		} else if opcode == compiler.OpIndex {
 			// Stack top is now [..., aggregate, index].
 			index := vm.pop()
 			aggregate := vm.pop()
@@ -460,9 +464,7 @@ func (vm *VM) Run() error {
 				return err
 			}
 			vm.push(result)
-			// ip already incremented by the loop
-
-		case compiler.OpSetIndex: // Using compiler.OpSetIndex (from compiler package)
+		} else if opcode == compiler.OpSetIndex {
 			// Stack top is now [..., aggregate, index, value].
 			value := vm.pop()
 			index := vm.pop()
@@ -478,43 +480,43 @@ func (vm *VM) Run() error {
 			// The result of assignment is typically the assigned value or the aggregate itself.
 			// Let's push the assigned value back onto the stack for now.
 			vm.push(value)
-			// ip already incremented by the loop
-
-		case compiler.OpJump: // Using compiler.OpJump (from compiler package)
-			pos := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip = int(pos) - 1                  // Set ip to target - 1, loop increment will make it target
-
-		case compiler.OpJumpNotTruthy: // Using compiler.OpJumpNotTruthy (from compiler package)
-			pos := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                            // Move past the operand (2 bytes)
+		} else if opcode == compiler.OpJump { // Added Jump cases back
+			pos := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
+			currentFrame.ip = int(pos) - 1                      // Set ip to target - 1, loop increment will make it target
+			// ip is NOT advanced after the dispatch block
+		} else if opcode == compiler.OpJumpNotTruthy { // Added Jump cases back
+			pos := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
 			condition := vm.pop()
 			if !isTruthy(condition) { // isTruthy is defined below in vm package
 				currentFrame.ip = int(pos) - 1 // Set ip to target - 1
+			} else {
+				// If not jumping, advance ip past the operand
+				currentFrame.ip += 2
 			}
-			// ip will be incremented by the loop in the next iteration
-
-		case compiler.OpJumpTruthy: // Using compiler.OpJumpTruthy (from compiler package)
-			pos := compiler.ReadUint16(instructions[ip+1:]) // Using compiler.ReadUint16 (from compiler package)
-			currentFrame.ip += 2                            // Move past the operand (2 bytes)
+			// ip is NOT advanced after the dispatch block
+		} else if opcode == compiler.OpJumpTruthy { // Added Jump cases back
+			pos := binary.BigEndian.Uint16(instructions[ip+1:]) // Using binary.BigEndian
 			condition := vm.pop()
 			if isTruthy(condition) { // isTruthy is defined below in vm package
 				currentFrame.ip = int(pos) - 1 // Set ip to target - 1
+			} else {
+				// If not jumping, advance ip past the operand
+				currentFrame.ip += 2
 			}
-			// ip will be incremented by the loop in the next iteration
-
-		case compiler.OpPrint: // Using compiler.OpPrint (from compiler package)
+			// ip is NOT advanced after the dispatch block
+		} else if opcode == compiler.OpPrint { // Added OpPrint case back
 			// --- Debug Print: At start of OpPrint ---
 			// Get the current frame's base pointer for context
 			currentBasePtr := 0
-			if vm.framesIndex > 0 {
-				currentBasePtr = vm.currentFrame().basePointer
+			currentFrame := vm.currentFrame()              // Get current frame
+			if vm.framesIndex > 0 && currentFrame != nil { // Add nil check
+				currentBasePtr = currentFrame.basePointer
 			}
 			fmt.Printf("DEBUG (OpPrint): Starting - Stack: %v, sp: %d, basePtr: %d\n", vm.stack[:vm.sp], vm.sp, currentBasePtr)
 			// --- End Debug Print ---
 
 			// Operand for print arguments count is 1 byte (uint8)
-			numArgs := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
-			currentFrame.ip += 1                               // Operand (1 byte for uint8)
+			numArgs := instructions[ip+1] // Read uint8 directly
 
 			// Arguments are on the stack in reverse order of compilation.
 			// Pop them and print.
@@ -524,11 +526,9 @@ func (vm *VM) Run() error {
 				args[i] = vm.pop().Inspect() // Assuming Inspect() gives a string representation
 			}
 			fmt.Fprintln(vm.outputWriter, strings.Join(args, " "))
-
-		case compiler.OpCall: // Using compiler.OpCall (from compiler package)
+		} else if opcode == compiler.OpCall {
 			// Operand for call arguments count is 1 byte (uint8)
-			numArgs := compiler.ReadUint8(instructions[ip+1:]) // Using compiler.ReadUint8 (from compiler package)
-			currentFrame.ip += 1                               // Operand (1 byte for uint8)
+			numArgs := instructions[ip+1] // Read uint8 directly
 
 			// --- Debug Print: Before OpCall setup ---
 			fmt.Printf("DEBUG (OpCall): Before setup - Stack: %v, sp: %d\n", vm.stack[:vm.sp], vm.sp)
@@ -578,7 +578,6 @@ func (vm *VM) Run() error {
 
 			// --- FIX: Reset and clear the main stack space used by the call setup ---
 			// Explicitly nil out the stack slots used by the function object and arguments.
-			// This is crucial to prevent the called function from seeing these old values.
 			for i := basePointer; i < vm.sp; i++ {
 				vm.stack[i] = nil
 			}
@@ -587,7 +586,8 @@ func (vm *VM) Run() error {
 			vm.sp = basePointer
 
 			// --- Debug Print: After OpCall setup ---
-			fmt.Printf("DEBUG (OpCall): After setup - Stack: %v, sp: %d, basePtr: %d, locals: %v\n", vm.stack[:vm.sp], vm.sp, basePointer, newFrame.locals)
+			// Print the absolute stack state, not relative to basePointer
+			fmt.Printf("DEBUG (OpCall): After setup - Stack: %v, sp: %d, newFrameBasePtr: %d, newFrameLocals: %v\n", vm.stack[:vm.sp], vm.sp, newFrame.basePointer, newFrame.locals)
 			// --- End Debug Print ---
 
 			// Push the new frame onto the frame stack.
@@ -596,48 +596,18 @@ func (vm *VM) Run() error {
 			// The VM will continue execution from the start of the new frame's instructions
 			// in the next iteration of the main loop.
 			// The stack pointer (vm.sp) has been adjusted correctly for the new frame.
+			// The ip will be advanced by the loop in the next iteration, starting from the new frame's ip (-1 + 1 = 0).
 
-		case compiler.OpReturn: // Using compiler.OpReturn (from compiler package)
-			// This opcode is typically emitted by the compiler at the end of a function
-			// or for a `return` statement without a value.
-			// It implicitly returns nil. The compiler should push nil before OpReturn.
-
-			// --- Debug Print: Before OpReturn frame pop ---
-			// Get the current frame's base pointer for context
-			currentBasePtr := 0
-			if vm.framesIndex > 0 {
-				currentBasePtr = vm.currentFrame().basePointer
-			}
-			fmt.Printf("DEBUG (OpReturn): Before frame pop - Stack: %v, sp: %d, basePtr: %d\n", vm.stack[:vm.sp], vm.sp, currentBasePtr)
-			// --- End Debug Print ---
-
-			// Pop the current frame.
-			frame := vm.popFrame() // Referring to popFrame (defined below in vm package)
-
-			// The return value (nil) should be on the stack, pushed by the compiler (OpNull).
-			// We don't pop it here, as it will be left on the stack for the caller.
-
-			// Restore the stack pointer to the state before the function call.
-			// This is the base pointer of the popped frame.
-			// The implicit nil return value should be at vm.stack[vm.sp] if compiler is correct.
-			vm.sp = frame.basePointer
-
-			// --- Debug Print: After stack restore ---
-			fmt.Printf("DEBUG (OpReturn): After stack restore - Stack: %v, sp: %d, frameBasePtr: %d\n", vm.stack[:vm.sp], vm.sp, frame.basePointer)
-			// --- End Debug Print ---
-
-			// Do NOT push nil here. The compiler is responsible for pushing the return value (nil).
-			// The value is already at vm.stack[frame.basePointer] if the compiler emitted OpNull before OpReturn.
-
-		case compiler.OpReturnValue: // Using compiler.OpReturnValue (from compiler package)
+		} else if opcode == compiler.OpReturnValue {
 			// This opcode is emitted by the compiler for a `return expression` statement.
 			// The return value is already on top of the stack.
 
 			// --- Debug Print: Before OpReturnValue pop ---
 			// Get the current frame's base pointer for context
 			currentBasePtr := 0
-			if vm.framesIndex > 0 {
-				currentBasePtr = vm.currentFrame().basePointer
+			currentFrame := vm.currentFrame()              // Get current frame
+			if vm.framesIndex > 0 && currentFrame != nil { // Add nil check
+				currentBasePtr = currentFrame.basePointer
 			}
 			fmt.Printf("DEBUG (OpReturnValue): Before pop - Stack: %v, sp: %d, basePtr: %d\n", vm.stack[:vm.sp], vm.sp, currentBasePtr)
 			// --- End Debug Print ---
@@ -670,16 +640,50 @@ func (vm *VM) Run() error {
 			// --- Debug Print: After push ---
 			fmt.Printf("DEBUG (OpReturnValue): After push - Stack: %v, sp: %d\n", vm.stack[:vm.sp], vm.sp)
 			// --- End Debug Print ---
+			// The loop will continue and process the caller's next instruction.
 
-		case compiler.OpGetIterator:
+		} else if opcode == compiler.OpReturn {
+			// This opcode is typically emitted by the compiler at the end of a function
+			// or for a `return` statement without a value.
+			// It implicitly returns nil. The compiler should push nil before OpReturn.
+
+			// --- Debug Print: Before OpReturn frame pop ---
+			// Get the current frame's base pointer for context
+			currentBasePtr := 0
+			currentFrame := vm.currentFrame()              // Get current frame
+			if vm.framesIndex > 0 && currentFrame != nil { // Add nil check
+				currentBasePtr = currentFrame.basePointer
+			}
+			fmt.Printf("DEBUG (OpReturn): Before frame pop - Stack: %v, sp: %d, basePtr: %d\n", vm.stack[:vm.sp], vm.sp, currentBasePtr)
+			// --- End Debug Print ---
+
+			// Pop the current frame.
+			frame := vm.popFrame() // Referring to popFrame (defined below in vm package)
+
+			// The return value (nil) should be on the stack, pushed by the compiler (OpNull).
+			// We don't pop it here, as it will be left on the stack for the caller.
+
+			// Restore the stack pointer to the state before the function call.
+			// This is the base pointer of the popped frame.
+			// The implicit nil return value should be at vm.stack[vm.sp] if compiler is correct.
+			vm.sp = frame.basePointer
+
+			// --- Debug Print: After stack restore ---
+			fmt.Printf("DEBUG (OpReturn): After stack restore - Stack: %v, sp: %d, frameBasePtr: %d\n", vm.stack[:vm.sp], vm.sp, frame.basePointer)
+			// --- End Debug Print ---
+
+			// Do NOT push nil here. The compiler is responsible for pushing the return value (nil).
+			// The value is already at vm.stack[frame.basePointer] if the compiler emitted OpNull before OpReturn.
+			// The loop will continue and process the caller's next instruction.
+
+		} else if opcode == compiler.OpGetIterator {
 			iterable := vm.pop()
 			it, err := iterable.GetIterator()
 			if err != nil {
 				return fmt.Errorf("runtime error: %v", err)
 			}
 			vm.push(it)
-
-		case compiler.OpIteratorNext:
+		} else if opcode == compiler.OpIteratorNext {
 			// Pop the iterator
 			iteratorVal := vm.pop()
 			iterator, ok := iteratorVal.(types.Iterator)
@@ -697,10 +701,19 @@ func (vm *VM) Run() error {
 			vm.push(iteratorVal)
 			vm.push(value)
 			vm.push(&types.Boolean{Value: success})
+		} else {
+			// This case should ideally not be reached.
+			return fmt.Errorf("runtime error: unknown opcode: %v at %d", opcode, ip)
+		}
 
-		default:
-			// TODO: Return a runtime error for unknown opcode
-			return fmt.Errorf("runtime error: unknown opcode %v at %d", opcode, ip)
+		// Advance the instruction pointer by the size of the executed instruction.
+		// This must happen *after* the dispatch block for most opcodes,
+		// but *not* for jump instructions which set the ip directly.
+		// Check if the opcode was a jump instruction.
+		isJumpInstruction := opcode == compiler.OpJump || opcode == compiler.OpJumpNotTruthy || opcode == compiler.OpJumpTruthy
+
+		if !isJumpInstruction {
+			currentFrame.ip += (instructionSize - 1) // ip was already incremented by 1 at the start of the loop
 		}
 	}
 
@@ -722,8 +735,8 @@ func (vm *VM) add(left, right types.Value) types.Value { // Referring to Value f
 	// Check for nil values first to avoid panics
 	if left == nil || right == nil {
 		// TODO: Implement proper runtime error reporting
-		fmt.Fprintf(os.Stderr, "runtime error: cannot perform addition on nil values\n")
-		return &types.Nil{} // Return nil value or a specific error value - Referring to Nil from types package
+		// fmt.Fprintf(os.Stderr, "runtime error: cannot perform addition on nil values\n")
+		return &types.Error{Message: "cannot perform addition on nil values"} // Return specific error value
 	}
 
 	// Handle addition based on the types of the operands
@@ -739,8 +752,8 @@ func (vm *VM) add(left, right types.Value) types.Value { // Referring to Value f
 			return &types.String{Value: fmt.Sprintf("%d%s", left.Value, right.Value)} // Referring to String from types package
 		default:
 			// Incompatible types for addition
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: integer + %s\n", right.Type())
-			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: integer + %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for addition: integer + %s", right.Type())} // Return specific error value
 		}
 	case *types.Float: // Referring to Float from types package
 		switch right := right.(type) {
@@ -753,8 +766,8 @@ func (vm *VM) add(left, right types.Value) types.Value { // Referring to Value f
 			return &types.String{Value: fmt.Sprintf("%f%s", left.Value, right.Value)} // Referring to String from types package
 		default:
 			// Incompatible types for addition
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: float + %s\n", right.Type())
-			return &types.Nil{} // TODO: Return a specific error value - Referring to Nil
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: float + %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for addition: float + %s", right.Type())} // Return specific error value
 		}
 	case *types.String: // Referring to String from types package
 		// String concatenation
@@ -775,8 +788,8 @@ func (vm *VM) add(left, right types.Value) types.Value { // Referring to Value f
 		}
 	default:
 		// Incompatible types for addition
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: %s + %s\n", left.Type(), right.Type())
-		return &types.Nil{} // TODO: Return a specific error value - Referring to Nil from types package
+		// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for addition: %s + %s\n", left.Type(), right.Type())
+		return &types.Error{Message: fmt.Sprintf("unsupported types for addition: %s + %s", left.Type(), right.Type())} // Return specific error value
 	}
 }
 
@@ -784,8 +797,8 @@ func (vm *VM) add(left, right types.Value) types.Value { // Referring to Value f
 func (vm *VM) subtract(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot perform subtraction on nil values\n")
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: cannot perform subtraction on nil values\n")
+		return &types.Error{Message: "cannot perform subtraction on nil values"}
 	}
 
 	// Handle subtraction based on types
@@ -797,8 +810,8 @@ func (vm *VM) subtract(left, right types.Value) types.Value { // Referring to Va
 		case *types.Float:
 			return &types.Float{Value: float64(left.Value) - right.Value}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: integer - %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: integer - %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for subtraction: integer - %s", right.Type())}
 		}
 	case *types.Float:
 		switch right := right.(type) {
@@ -807,12 +820,12 @@ func (vm *VM) subtract(left, right types.Value) types.Value { // Referring to Va
 		case *types.Float:
 			return &types.Float{Value: left.Value - right.Value}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: float - %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: float - %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for subtraction: float - %s", right.Type())}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: %s - %s\n", left.Type(), right.Type())
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for subtraction: %s - %s\n", left.Type(), right.Type())
+		return &types.Error{Message: fmt.Sprintf("unsupported types for subtraction: %s - %s", left.Type(), right.Type())}
 	}
 }
 
@@ -820,8 +833,8 @@ func (vm *VM) subtract(left, right types.Value) types.Value { // Referring to Va
 func (vm *VM) multiply(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot perform multiplication on nil values\n")
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: cannot perform multiplication on nil values\n")
+		return &types.Error{Message: "cannot perform multiplication on nil values"}
 	}
 
 	// Handle multiplication based on types
@@ -833,8 +846,8 @@ func (vm *VM) multiply(left, right types.Value) types.Value { // Referring to Va
 		case *types.Float:
 			return &types.Float{Value: float64(left.Value) * right.Value}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: integer * %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: integer * %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for multiplication: integer * %s", right.Type())}
 		}
 	case *types.Float:
 		switch right := right.(type) {
@@ -843,12 +856,12 @@ func (vm *VM) multiply(left, right types.Value) types.Value { // Referring to Va
 		case *types.Float:
 			return &types.Float{Value: left.Value * right.Value}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: float * %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: float * %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for multiplication: float * %s", right.Type())}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: %s * %s\n", left.Type(), right.Type())
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for multiplication: %s * %s\n", left.Type(), right.Type())
+		return &types.Error{Message: fmt.Sprintf("unsupported types for multiplication: %s * %s", left.Type(), right.Type())}
 	}
 }
 
@@ -856,8 +869,8 @@ func (vm *VM) multiply(left, right types.Value) types.Value { // Referring to Va
 func (vm *VM) divide(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot perform division on nil values\n")
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: cannot perform division on nil values\n")
+		return &types.Error{Message: "cannot perform division on nil values"}
 	}
 
 	// Handle division based on types
@@ -866,41 +879,41 @@ func (vm *VM) divide(left, right types.Value) types.Value { // Referring to Valu
 		switch right := right.(type) {
 		case *types.Integer:
 			if right.Value == 0 {
-				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific Error type
+				// fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Error{Message: "division by zero"} // Or a specific Error type
 			}
-			return &types.Integer{Value: left.Value / right.Value}
+			return &types.Integer{Value: left.Value / right.Value} // Integer division results in float
 		case *types.Float:
 			if right.Value == 0.0 {
-				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific Error type
+				// fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Error{Message: "division by zero"} // Or a specific Error type
 			}
 			return &types.Float{Value: float64(left.Value) / right.Value}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: integer / %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: integer / %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for division: integer / %s", right.Type())}
 		}
 	case *types.Float:
 		switch right := right.(type) {
 		case *types.Integer:
 			if right.Value == 0 {
-				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific Error type
+				// fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Error{Message: "division by zero"} // Or a specific Error type
 			}
 			return &types.Float{Value: left.Value / float64(right.Value)}
 		case *types.Float:
 			if right.Value == 0.0 {
-				fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
-				return &types.Nil{} // Or a specific Error type
+				// fmt.Fprintf(os.Stderr, "runtime error: division by zero\n")
+				return &types.Error{Message: "division by zero"} // Or a specific Error type
 			}
 			return &types.Float{Value: left.Value / right.Value}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: float / %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: float / %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for division: float / %s", right.Type())}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: %s / %s\n", left.Type(), right.Type())
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for division: %s / %s\n", left.Type(), right.Type())
+		return &types.Error{Message: fmt.Sprintf("unsupported types for division: %s / %s", left.Type(), right.Type())}
 	}
 }
 
@@ -908,8 +921,8 @@ func (vm *VM) divide(left, right types.Value) types.Value { // Referring to Valu
 func (vm *VM) modulo(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot perform modulo on nil values\n")
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: cannot perform modulo on nil values\n")
+		return &types.Error{Message: "cannot perform modulo on nil values"}
 	}
 
 	// Modulo is typically only defined for integers
@@ -917,13 +930,13 @@ func (vm *VM) modulo(left, right types.Value) types.Value { // Referring to Valu
 	rightInt, okRight := right.(*types.Integer)
 
 	if !okLeft || !okRight {
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for modulo: %s %% %s\n", left.Type(), right.Type())
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for modulo: %s %% %s\n", left.Type(), right.Type())
+		return &types.Error{Message: fmt.Sprintf("unsupported types for modulo: %s %% %s", left.Type(), right.Type())}
 	}
 
 	if rightInt.Value == 0 {
-		fmt.Fprintf(os.Stderr, "runtime error: modulo by zero\n")
-		return &types.Nil{} // Or a specific Error type
+		// fmt.Fprintf(os.Stderr, "runtime error: modulo by zero\n")
+		return &types.Error{Message: "modulo by zero"} // Or a specific Error type
 	}
 
 	return &types.Integer{Value: leftInt.Value % rightInt.Value}
@@ -933,8 +946,8 @@ func (vm *VM) modulo(left, right types.Value) types.Value { // Referring to Valu
 func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value from types package
 	// Check for nil values first
 	if left == nil || right == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot perform power on nil values\n")
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: cannot perform power on nil values\n")
+		return &types.Error{Message: "cannot perform power on nil values"}
 	}
 
 	// Handle power based on types
@@ -948,8 +961,8 @@ func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value
 			// Integer base, float exponent
 			return &types.Float{Value: math.Pow(float64(left.Value), right.Value)}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: integer ^ %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: integer ^ %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for power: integer ^ %s", right.Type())}
 		}
 	case *types.Float:
 		switch right := right.(type) {
@@ -960,20 +973,20 @@ func (vm *VM) power(left, right types.Value) types.Value { // Referring to Value
 			// Float power
 			return &types.Float{Value: math.Pow(left.Value, right.Value)}
 		default:
-			fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: float ^ %s\n", right.Type())
-			return &types.Nil{}
+			// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: float ^ %s\n", right.Type())
+			return &types.Error{Message: fmt.Sprintf("unsupported types for power: float ^ %s", right.Type())}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: %s ^ %s\n", left.Type(), right.Type())
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: unsupported types for power: %s ^ %s\n", left.Type(), right.Type())
+		return &types.Error{Message: fmt.Sprintf("unsupported types for power: %s ^ %s", left.Type(), right.Type())}
 	}
 }
 
 // negate performs unary negation.
 func (vm *VM) negate(operand types.Value) types.Value { // Referring to Value from types package
 	if operand == nil {
-		fmt.Fprintf(os.Stderr, "runtime error: cannot negate nil value\n")
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: cannot negate nil value\n")
+		return &types.Error{Message: "cannot negate nil value"}
 	}
 
 	switch operand := operand.(type) {
@@ -982,8 +995,8 @@ func (vm *VM) negate(operand types.Value) types.Value { // Referring to Value fr
 	case *types.Float:
 		return &types.Float{Value: -operand.Value}
 	default:
-		fmt.Fprintf(os.Stderr, "runtime error: unsupported type for negation: -%s\n", operand.Type())
-		return &types.Nil{}
+		// fmt.Fprintf(os.Stderr, "runtime error: unsupported type for negation: -%s\n", operand.Type())
+		return &types.Error{Message: fmt.Sprintf("unsupported type for negation: -%s", operand.Type())}
 	}
 }
 
@@ -1011,8 +1024,8 @@ func (vm *VM) greaterThan(left, right types.Value) types.Value { // Referring to
 	// Use the Compare method defined on the Value interface.
 	cmp, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific Error type
+		// fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
+		return &types.Error{Message: fmt.Sprintf("comparison error: %v", err)} // Or a specific Error type
 	}
 	return &types.Boolean{Value: cmp > 0} // Referring to Boolean from types package
 }
@@ -1022,8 +1035,8 @@ func (vm *VM) lessThan(left, right types.Value) types.Value { // Referring to Va
 	// Use the Compare method.
 	cmp, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific Error type
+		// fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
+		return &types.Error{Message: fmt.Sprintf("comparison error: %v", err)} // Or a specific Error type
 	}
 	return &types.Boolean{Value: cmp < 0} // Referring to Boolean from types package
 }
@@ -1033,8 +1046,8 @@ func (vm *VM) greaterEqual(left, right types.Value) types.Value { // Referring t
 	// Use the Compare method.
 	cmp, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific Error type
+		// fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
+		return &types.Error{Message: fmt.Sprintf("comparison error: %v", err)} // Or a specific Error type
 	}
 	return &types.Boolean{Value: cmp >= 0} // Referring to Boolean from types package
 }
@@ -1044,8 +1057,8 @@ func (vm *VM) lessEqual(left, right types.Value) types.Value { // Referring to V
 	// Use the Compare method.
 	cmp, err := left.Compare(right)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-		return &types.Nil{} // Or a specific Error type
+		// fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
+		return &types.Error{Message: fmt.Sprintf("comparison error: %v", err)} // Or a specific Error type
 	}
 	return &types.Boolean{Value: cmp <= 0} // Referring to Boolean from types package
 }
@@ -1081,4 +1094,9 @@ func isTruthy(obj types.Value) bool { // Referring to Value from types package
 		// Unknown types are considered falsy by default
 		return false
 	}
+}
+
+// SetOutputWriter sets the writer for print statements.
+func (vm *VM) SetOutputWriter(writer io.Writer) {
+	vm.outputWriter = writer
 }

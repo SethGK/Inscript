@@ -158,10 +158,15 @@ func (v *ASTBuilder) VisitCompoundStmt(ctx *parser.CompoundStmtContext) interfac
 
 // VisitAssignment builds an AssignStmt node.
 func (v *ASTBuilder) VisitAssignment(ctx *parser.AssignmentContext) interface{} {
-	// fmt.Println("DEBUG: Visiting Assignment") // Less verbose debug print
-	// Target must be a Primary expression (e.g., identifier, index, call)
-	target := ctx.Primary().Accept(v).(Expression)
-	// Value is any Expression
+	raw := ctx.Primary().Accept(v)
+	target, ok := raw.(Expression)
+	if !ok || target == nil {
+		panic(fmt.Sprintf(
+			"VisitAssignment: invalid target (expected Expression), got %T (primary: %s)",
+			raw,
+			ctx.Primary().GetText(),
+		))
+	}
 	value := ctx.Expression().Accept(v).(Expression)
 	return &AssignStmt{Target: target, Value: value, PosToken: token.Pos(ctx.GetStart().GetStart())}
 }
@@ -491,64 +496,48 @@ func (v *ASTBuilder) VisitUnary(ctx *parser.UnaryContext) interface{} {
 
 // VisitPrimary handles primary expressions, including indexing and function calls.
 func (v *ASTBuilder) VisitPrimary(ctx *parser.PrimaryContext) interface{} {
-	// fmt.Println("DEBUG: Visiting Primary") // Less verbose debug print
-	// Start with the base atom
-	expr := ctx.Atom().Accept(v).(Expression)
+	// Visit the atom
+	atomVal := ctx.Atom().Accept(v)
+	if atomVal == nil {
+		fmt.Println("ERROR: VisitPrimary - Atom returned nil")
+		return nil
+	}
+	expr, ok := atomVal.(Expression)
+	if !ok {
+		panic(fmt.Sprintf("VisitPrimary - Atom did not return Expression, got %T", atomVal))
+	}
 
-	// Iterate through all children after the atom to find suffixes
-	// The children are ordered: atom suffix1 suffix2 ...
+	// Process suffixes like [index] and (args...)
 	for i := 1; i < ctx.GetChildCount(); i++ {
-		suffixChild := ctx.GetChild(i)
+		suffix := ctx.GetChild(i)
 
-		// Check if the suffix is an indexing operation (starts with '[')
-		if termNode, ok := suffixChild.(antlr.TerminalNode); ok && termNode.GetSymbol().GetTokenType() == parser.InscriptParserT__30 { // Corrected token name for '[' based on list
-			// The next child should be the expression inside the brackets, followed by ']'
-			// The structure is primary -> atom '[' expression ']'
-			// We need to get the expression child which is at index i+1
-			if i+1 < ctx.GetChildCount() {
-				// Assert the child is an ExpressionContext before calling Accept
-				if indexExprCtx, ok := ctx.GetChild(i + 1).(*parser.ExpressionContext); ok {
-					indexExpr := indexExprCtx.Accept(v).(Expression)
-					// Wrap the current expression in an IndexExpr node using the correct field name 'Primary'
-					expr = &IndexExpr{Primary: expr, Index: indexExpr, PosToken: token.Pos(termNode.GetSymbol().GetStart())} // Use '[' token position
-					i += 2                                                                                                   // Skip the expression and the closing ']'
-				} else {
-					// Handle unexpected child type (should ideally be caught by parser)
-					break
-				}
-			} else {
-				// Handle unexpected end of input after '['
-				break
+		if term, ok := suffix.(antlr.TerminalNode); ok && term.GetSymbol().GetText() == "[" {
+			indexCtx := ctx.Expression(i / 2) // depending on grammar structure, adjust this
+			if indexCtx == nil {
+				fmt.Println("ERROR: VisitPrimary - Missing index expression")
+				return nil
 			}
-		} else if termNode, ok := suffixChild.(antlr.TerminalNode); ok && termNode.GetSymbol().GetTokenType() == parser.InscriptParserT__2 { // Corrected token name for '(' based on list
-			// The suffix is a function call (starts with '(')
-			// The structure is primary -> atom '(' expressionListOpt ')'
-			// The ExpressionListOpt is the next child at index i+1
-			if i+1 < ctx.GetChildCount() {
-				// Assert the child is an ExpressionListOptContext before calling calling Accept
-				if expressionListOptCtx, ok := ctx.GetChild(i + 1).(*parser.ExpressionListOptContext); ok {
-					var args []Expression
-					// Check if there's an actual expression list
-					if el := expressionListOptCtx.ExpressionList(); el != nil {
-						// Visit the expression list to get the arguments
-						if visitedArgs, ok := el.Accept(v).([]Expression); ok {
-							args = visitedArgs
-						}
-					}
-					// Wrap the current expression in a CallExpr node using the correct field name 'Callee'
-					expr = &CallExpr{Callee: expr, Args: args, PosToken: token.Pos(termNode.GetSymbol().GetStart())} // Use '(' token position
-					i += 2                                                                                           // Skip the expressionListOpt and the closing ')'
-				} else {
-					// Handle unexpected child type
-					break
-				}
-			} else {
-				// Handle unexpected end of input after '('
-				break
-			}
+			index := indexCtx.Accept(v).(Expression)
+			expr = &IndexExpr{Primary: expr, Index: index, PosToken: token.Pos(term.GetSymbol().GetStart())}
+			i += 2
 		}
-		// If the child is neither '[' nor '(', it's an unexpected child in primary
-		// The parser should ideally catch this.
+
+		if term, ok := suffix.(antlr.TerminalNode); ok && term.GetSymbol().GetText() == "(" {
+			argsCtx, ok := ctx.GetChild(i + 1).(*parser.ExpressionListOptContext)
+			if !ok {
+				fmt.Println("ERROR: VisitPrimary - Expected ExpressionListOptContext after '('")
+				return nil
+			}
+			var args []Expression
+			if argsList := argsCtx.ExpressionList(); argsList != nil {
+				argsIface := argsList.Accept(v)
+				if argsIface != nil {
+					args = argsIface.([]Expression)
+				}
+			}
+			expr = &CallExpr{Callee: expr, Args: args, PosToken: token.Pos(term.GetSymbol().GetStart())}
+			i += 2
+		}
 	}
 
 	return expr
@@ -556,35 +545,57 @@ func (v *ASTBuilder) VisitPrimary(ctx *parser.PrimaryContext) interface{} {
 
 // VisitAtom handles the different types of atoms (literals, identifiers, lists, tables, parenthesized expressions, function definitions).
 func (v *ASTBuilder) VisitAtom(ctx *parser.AtomContext) interface{} {
-	// fmt.Println("DEBUG: Visiting Atom") // Less verbose debug print
-	// Check which alternative the atom matches and visit accordingly
+	fmt.Printf("DEBUG: VisitAtom - text: %s\n", ctx.GetText())
+
 	if lit := ctx.Literal(); lit != nil {
+		fmt.Println("DEBUG: Atom is Literal")
 		return lit.Accept(v)
 	}
 	if id := ctx.IDENTIFIER(); id != nil {
-		// Build an Identifier node
-		return &Identifier{Name: id.GetText(), PosToken: token.Pos(id.GetSymbol().GetStart())}
+		fmt.Println("DEBUG: Atom is Identifier")
+		return &Identifier{
+			Name:     id.GetText(),
+			PosToken: token.Pos(id.GetSymbol().GetStart()),
+		}
 	}
 	if ll := ctx.ListLiteral(); ll != nil {
+		fmt.Println("DEBUG: Atom is ListLiteral")
 		return ll.Accept(v)
 	}
 	if tl := ctx.TableLiteral(); tl != nil {
+		fmt.Println("DEBUG: Atom is TableLiteral")
 		return tl.Accept(v)
 	}
-	// Handle the new case for function definitions as atoms/expressions
-	if fd := ctx.FunctionDef(); fd != nil {
-		// Visit the function definition context. VisitFunctionDef should now return *ast.FunctionLiteral
-		return fd.Accept(v) // VisitFunctionDef builds and returns a FunctionLiteral
+	if fn := ctx.FnLiteral(); fn != nil {
+		fmt.Println("DEBUG: Atom is FunctionLiteral")
+		return fn.Accept(v)
 	}
-	// If none of the above match, it must be a parenthesized expression '(' expression ')'
-	// The expression is the child at index 1. We need to assert its type.
-	// This check needs to be after the other alternatives.
-	if exprCtx := ctx.Expression(); exprCtx != nil { // Handles parenthesized expressions '(' expression ')'
-		return exprCtx.Accept(v)
+	if expr := ctx.Expression(); expr != nil {
+		fmt.Println("DEBUG: Atom is Parenthesized Expression")
+		return expr.Accept(v)
 	}
 
-	// If none of the above match, it's an unexpected atom type (should ideally be caught by parser)
-	return nil // Or return an error
+	fmt.Printf("ERROR: VisitAtom could not match anything. Atom text: %s\n", ctx.GetText())
+	return nil
+}
+
+// VisitFnLiteral builds a FunctionLiteral node from the 'function(...) { ... }' rule.
+func (v *ASTBuilder) VisitFnLiteral(ctx *parser.FnLiteralContext) interface{} {
+	fmt.Println("DEBUG: Visiting FnLiteral") // Debug print
+	var params []string
+	if pl := ctx.ParamListOpt().ParamList(); pl != nil {
+		for _, id := range pl.AllIDENTIFIER() {
+			params = append(params, id.GetText())
+		}
+	}
+	body := ctx.Block().Accept(v).(*BlockStmt)
+	fn := &FunctionLiteral{
+		Params:   params,
+		Body:     body,
+		PosToken: token.Pos(ctx.GetStart().GetStart()),
+	}
+	fmt.Printf("DEBUG: Finished Visiting FnLiteral, returning %+v\n", fn)
+	return fn
 }
 
 // VisitListLiteral builds a ListLiteral node.

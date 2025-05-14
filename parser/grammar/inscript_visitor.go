@@ -68,18 +68,6 @@ type InscriptVisitor interface {
 	// Visit a parse tree produced by InscriptParser#expressionOpt.
 	VisitExpressionOpt(ctx *ExpressionOptContext) interface{}
 
-	// Visit a parse tree produced by InscriptParser#expressionListOpt.
-	VisitExpressionListOpt(ctx *ExpressionListOptContext) interface{}
-
-	// Visit a parse tree produced by InscriptParser#expressionList.
-	VisitExpressionList(ctx *ExpressionListContext) interface{}
-
-	// Visit a parse tree produced by InscriptParser#paramListOpt.
-	VisitParamListOpt(ctx *ParamListOptContext) interface{}
-
-	// Visit a parse tree produced by InscriptParser#paramList.
-	VisitParamList(ctx *ParamListContext) interface{}
-
 	// Visit a parse tree produced by InscriptParser#expression.
 	VisitExpression(ctx *ExpressionContext) interface{}
 
@@ -110,6 +98,9 @@ type InscriptVisitor interface {
 	// Visit a parse tree produced by InscriptParser#atom.
 	VisitAtom(ctx *AtomContext) interface{}
 
+	// Visit a parse tree produced by InscriptParser#fnLiteral.
+	VisitFnLiteral(ctx *FnLiteralContext) interface{}
+
 	// Visit a parse tree produced by InscriptParser#listLiteral.
 	VisitListLiteral(ctx *ListLiteralContext) interface{}
 
@@ -127,4 +118,16 @@ type InscriptVisitor interface {
 
 	// Visit a parse tree produced by InscriptParser#literal.
 	VisitLiteral(ctx *LiteralContext) interface{}
+
+	// Visit a parse tree produced by InscriptParser#paramListOpt.
+	VisitParamListOpt(ctx *ParamListOptContext) interface{}
+
+	// Visit a parse tree produced by InscriptParser#paramList.
+	VisitParamList(ctx *ParamListContext) interface{}
+
+	// Visit a parse tree produced by InscriptParser#expressionListOpt.
+	VisitExpressionListOpt(ctx *ExpressionListOptContext) interface{}
+
+	// Visit a parse tree produced by InscriptParser#expressionList.
+	VisitExpressionList(ctx *ExpressionListContext) interface{}
 }

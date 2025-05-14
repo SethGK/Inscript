@@ -50,44 +50,108 @@ func NewEnclosedSymbolTable(outer *SymbolTable, isFunc bool) *SymbolTable {
 
 // Define adds a new symbol in the current scope.
 func (s *SymbolTable) Define(name string, kind SymbolKind) *Symbol {
+	// --- Debug Print: Defining symbol ---
+	fmt.Printf("DEBUG (SymbolTable): Defining '%s' as kind %s in scope %p (numDefinitions: %d)\n", name, kind, s, s.numDefinitions)
+	// --- End Debug Print ---
+
 	sym := &Symbol{Name: name, Kind: kind, Index: s.numDefinitions}
 	s.store[name] = sym
 	s.numDefinitions++
+
+	// --- Debug Print: Store after define ---
+	// Uncomment the line below if you want to see the store contents after every definition
+	// s.DebugStore()
+	// --- End Debug Print ---
+
 	return sym
 }
 
 // DefineBuiltin registers a builtin symbol in the given index (globals table).
 func (s *SymbolTable) DefineBuiltin(index int, name string) *Symbol {
 	sym := &Symbol{Name: name, Kind: Builtin, Index: index}
-	s.store[name] = sym
+	s.store[name] = sym // Builtins go directly into the store
+	// Builtins don't count towards numDefinitions for local/global index allocation
+
+	// --- Debug Print: Defining builtin ---
+	fmt.Printf("DEBUG (SymbolTable): Defining builtin '%s' at index %d in scope %p\n", name, index, s)
+	// --- End Debug Print ---
+
 	return sym
 }
 
 // Resolve looks up a name in current, then outer, returning the symbol.
 // It also records free variables when resolving from a non-global outer function scope.
 func (s *SymbolTable) Resolve(name string) (*Symbol, bool) {
-	// Check current scope
+	// --- Debug Print: Resolving symbol ---
+	fmt.Printf("DEBUG (SymbolTable): Resolving '%s' in scope %p (IsFunc: %v)\n", name, s, s.isFunctionScope)
+	// Uncomment the line below if you want to see the store contents at the start of every resolve
+	// s.DebugStore()
+	// --- End Debug Print ---
+
+	// Check current scope first (for locals and parameters defined locally)
 	if sym, ok := s.store[name]; ok {
-		return sym, true
+		// --- Debug Print: Found locally ---
+		fmt.Printf("DEBUG (SymbolTable): Found '%s' locally in scope %p: kind %s, index %d\n", name, s, sym.Kind, sym.Index)
+		// --- End Debug Print ---
+		return sym, true // Found locally!
 	}
-	// If no outer, not found
+
+	// If no outer, not found at all
 	if s.Outer == nil {
+		// --- Debug Print: Not found, no outer scope ---
+		fmt.Printf("DEBUG (SymbolTable): '%s' not found, no outer scope from %p\n", name, s)
+		// --- End Debug Print ---
 		return nil, false
 	}
-	// Recursively resolve in outer
+
+	// Recursively resolve in outer scope
+	// --- Debug Print: Resolving in outer scope ---
+	fmt.Printf("DEBUG (SymbolTable): '%s' not found in scope %p, resolving in outer scope %p\n", name, s, s.Outer)
+	// --- End Debug Print ---
 	sym, ok := s.Outer.Resolve(name)
 	if !ok {
-		return nil, false
+		// --- Debug Print: Not found in outer scopes ---
+		fmt.Printf("DEBUG (SymbolTable): '%s' not found in outer scopes from %p\n", name, s)
+		// --- End Debug Print ---
+		return nil, false // Not found in outer scopes
 	}
-	// If found in global or builtin, just return
+
+	// If found in global or builtin in an outer scope, just return that symbol.
+	// These are not captured as free variables.
 	if sym.Kind == Global || sym.Kind == Builtin {
+		// --- Debug Print: Found Global/Builtin in outer scope ---
+		fmt.Printf("DEBUG (SymbolTable): Found '%s' as %s in outer scope. Not capturing.\n", name, sym.Kind)
+		// --- End Debug Print ---
 		return sym, true
 	}
-	// Otherwise, it's a free variable for this scope
-	freeSym := &Symbol{Name: sym.Name, Kind: Free, Index: len(s.freeSymbols)}
-	s.freeSymbols = append(s.freeSymbols, sym)
-	// Register in current store so subsequent resolves use local free slot
-	s.store[name] = freeSym
+
+	// Otherwise, the symbol was found in a non-global/non-builtin outer scope.
+	// This means it's a free variable for the current scope.
+	// We need to capture it.
+
+	// Check if this free variable has already been captured by this scope.
+	// This prevents duplicate entries in freeSymbols for the same variable name.
+	for _, fs := range s.freeSymbols {
+		if fs.Name == name {
+			// Already captured, return the existing free symbol
+			fmt.Printf("→ Re-resolved captured free var '%s' as slot %d in scope %p\n", fs.Name, fs.Index, s)
+			return fs, true
+		}
+	}
+
+	// Add the symbol to the current scope's freeSymbols list.
+	// The index of the free symbol is its position in this list.
+	freeIndex := len(s.freeSymbols)
+	freeSym := &Symbol{Name: sym.Name, Kind: Free, Index: freeIndex}
+	s.freeSymbols = append(s.freeSymbols, freeSym)
+
+	// Debug print from the original code, kept for continuity
+	fmt.Printf("→ Captured free var '%s' as slot %d in scope %p\n", freeSym.Name, freeSym.Index, s)
+
+	// *** REMOVE THIS INCORRECT LINE: ***
+	// s.store[name] = freeSym // <-- This line was the bug! Removed.
+
+	// Return the newly created Free symbol for the current scope.
 	return freeSym, true
 }
 
@@ -103,14 +167,43 @@ func (s *SymbolTable) NumDefinitions() int {
 
 // Debug prints the contents of the symbol table (for development).
 func (s *SymbolTable) Debug() {
-	fmt.Printf("Symbols (funcScope=%v):\n", s.isFunctionScope)
-	for name, sym := range s.store {
-		fmt.Printf("  %s -> kind=%s idx=%d\n", name, sym.Kind, sym.Index)
-	}
+	fmt.Printf("Scope %p (funcScope=%v) Symbols:\n", s, s.isFunctionScope)
+	s.DebugStore() // Use the new method
 	if len(s.freeSymbols) > 0 {
 		fmt.Println("Free symbols:")
 		for i, fs := range s.freeSymbols {
-			fmt.Printf("  [%d] %s\n", i, fs.Name)
+			// Note: The Kind and Index here are for the Free symbol within THIS scope's freeSymbols list.
+			// They don't represent the original kind/index in the outer scope where it was defined.
+			fmt.Printf("  [%d] %s (Kind: %s, Index: %d)\n", i, fs.Name, fs.Kind, fs.Index)
 		}
 	}
+	if s.Outer != nil {
+		fmt.Printf("Outer scope: %p\n", s.Outer)
+		// Uncomment the line below for full recursive symbol table debugging
+		// s.Outer.Debug()
+	}
 }
+
+// DebugStore prints the contents of the store map.
+func (s *SymbolTable) DebugStore() {
+	fmt.Printf("  Store (%d entries):\n", len(s.store))
+	if len(s.store) == 0 {
+		fmt.Println("    <empty>")
+		return
+	}
+	for name, sym := range s.store {
+		fmt.Printf("    '%s' -> kind=%s idx=%d\n", name, sym.Kind, sym.Index)
+	}
+}
+
+// Example of adding DefineLocal/DefineParameter if they aren't just Define wrappers
+// These would typically call s.Define internally with the correct kind.
+/*
+func (s *SymbolTable) DefineLocal(name string) *Symbol {
+	return s.Define(name, Local)
+}
+
+func (s *SymbolTable) DefineParameter(name string) *Symbol {
+	return s.Define(name, Parameter)
+}
+*/

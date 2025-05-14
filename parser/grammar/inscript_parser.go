@@ -34,9 +34,9 @@ func inscriptParserInit() {
 	staticData := &InscriptParserStaticData
 	staticData.LiteralNames = []string{
 		"", "'='", "'print'", "'('", "')'", "'return'", "'if'", "'elseif'",
-		"'else'", "'while'", "'for'", "'in'", "'function'", "'{'", "'}'", "','",
-		"'or'", "'and'", "'=='", "'!='", "'<'", "'>'", "'<='", "'>='", "'+'",
-		"'-'", "'*'", "'/'", "'%'", "'^'", "'not'", "'['", "']'", "'nil'",
+		"'else'", "'while'", "'for'", "'in'", "'function'", "'{'", "'}'", "'or'",
+		"'and'", "'=='", "'!='", "'<'", "'>'", "'<='", "'>='", "'+'", "'-'",
+		"'*'", "'/'", "'%'", "'^'", "'not'", "'['", "']'", "','", "'nil'",
 	}
 	staticData.SymbolicNames = []string{
 		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
@@ -48,140 +48,143 @@ func inscriptParserInit() {
 		"program", "statementList", "statement", "simpleStmt", "assignment",
 		"exprStmt", "printStmt", "returnStmt", "compoundStmt", "ifStmt", "elseifListOpt",
 		"elseifList", "elseif", "elseBlockOpt", "whileStmt", "forStmt", "functionDef",
-		"block", "statementListOpt", "expressionOpt", "expressionListOpt", "expressionList",
-		"paramListOpt", "paramList", "expression", "logicalOr", "logicalAnd",
-		"comparison", "arith", "term", "factor", "unary", "primary", "atom",
-		"listLiteral", "tableLiteral", "fieldListOpt", "fieldList", "field",
-		"literal",
+		"block", "statementListOpt", "expressionOpt", "expression", "logicalOr",
+		"logicalAnd", "comparison", "arith", "term", "factor", "unary", "primary",
+		"atom", "fnLiteral", "listLiteral", "tableLiteral", "fieldListOpt",
+		"fieldList", "field", "literal", "paramListOpt", "paramList", "expressionListOpt",
+		"expressionList",
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 41, 301, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 1, 41, 309, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
 		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 2, 10, 7,
 		10, 2, 11, 7, 11, 2, 12, 7, 12, 2, 13, 7, 13, 2, 14, 7, 14, 2, 15, 7, 15,
 		2, 16, 7, 16, 2, 17, 7, 17, 2, 18, 7, 18, 2, 19, 7, 19, 2, 20, 7, 20, 2,
 		21, 7, 21, 2, 22, 7, 22, 2, 23, 7, 23, 2, 24, 7, 24, 2, 25, 7, 25, 2, 26,
 		7, 26, 2, 27, 7, 27, 2, 28, 7, 28, 2, 29, 7, 29, 2, 30, 7, 30, 2, 31, 7,
 		31, 2, 32, 7, 32, 2, 33, 7, 33, 2, 34, 7, 34, 2, 35, 7, 35, 2, 36, 7, 36,
-		2, 37, 7, 37, 2, 38, 7, 38, 2, 39, 7, 39, 1, 0, 1, 0, 1, 0, 1, 1, 4, 1,
-		85, 8, 1, 11, 1, 12, 1, 86, 1, 2, 1, 2, 3, 2, 91, 8, 2, 1, 3, 1, 3, 1,
-		3, 1, 3, 3, 3, 97, 8, 3, 1, 4, 1, 4, 1, 4, 1, 4, 1, 5, 1, 5, 1, 6, 1, 6,
-		1, 6, 1, 6, 1, 6, 1, 7, 1, 7, 1, 7, 1, 8, 1, 8, 1, 8, 1, 8, 3, 8, 117,
-		8, 8, 1, 9, 1, 9, 1, 9, 1, 9, 1, 9, 1, 9, 1, 10, 1, 10, 3, 10, 127, 8,
-		10, 1, 11, 4, 11, 130, 8, 11, 11, 11, 12, 11, 131, 1, 12, 1, 12, 1, 12,
-		1, 12, 1, 13, 1, 13, 1, 13, 3, 13, 141, 8, 13, 1, 14, 1, 14, 1, 14, 1,
-		14, 1, 15, 1, 15, 1, 15, 1, 15, 1, 15, 1, 15, 1, 16, 1, 16, 1, 16, 1, 16,
-		1, 16, 1, 16, 1, 17, 1, 17, 1, 17, 1, 17, 1, 18, 1, 18, 3, 18, 165, 8,
-		18, 1, 19, 1, 19, 3, 19, 169, 8, 19, 1, 20, 1, 20, 3, 20, 173, 8, 20, 1,
-		21, 1, 21, 1, 21, 5, 21, 178, 8, 21, 10, 21, 12, 21, 181, 9, 21, 1, 22,
-		1, 22, 3, 22, 185, 8, 22, 1, 23, 1, 23, 1, 23, 5, 23, 190, 8, 23, 10, 23,
-		12, 23, 193, 9, 23, 1, 24, 1, 24, 1, 25, 1, 25, 1, 25, 5, 25, 200, 8, 25,
-		10, 25, 12, 25, 203, 9, 25, 1, 26, 1, 26, 1, 26, 5, 26, 208, 8, 26, 10,
-		26, 12, 26, 211, 9, 26, 1, 27, 1, 27, 1, 27, 5, 27, 216, 8, 27, 10, 27,
-		12, 27, 219, 9, 27, 1, 28, 1, 28, 1, 28, 5, 28, 224, 8, 28, 10, 28, 12,
-		28, 227, 9, 28, 1, 29, 1, 29, 1, 29, 5, 29, 232, 8, 29, 10, 29, 12, 29,
-		235, 9, 29, 1, 30, 1, 30, 1, 30, 5, 30, 240, 8, 30, 10, 30, 12, 30, 243,
-		9, 30, 1, 31, 1, 31, 1, 31, 3, 31, 248, 8, 31, 1, 32, 1, 32, 1, 32, 1,
-		32, 1, 32, 1, 32, 1, 32, 1, 32, 1, 32, 5, 32, 259, 8, 32, 10, 32, 12, 32,
-		262, 9, 32, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1, 33, 1,
-		33, 3, 33, 273, 8, 33, 1, 34, 1, 34, 1, 34, 1, 34, 1, 35, 1, 35, 1, 35,
-		1, 35, 1, 36, 1, 36, 3, 36, 285, 8, 36, 1, 37, 1, 37, 1, 37, 5, 37, 290,
-		8, 37, 10, 37, 12, 37, 293, 9, 37, 1, 38, 1, 38, 1, 38, 1, 38, 1, 39, 1,
-		39, 1, 39, 0, 0, 40, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26,
-		28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62,
-		64, 66, 68, 70, 72, 74, 76, 78, 0, 5, 1, 0, 18, 23, 1, 0, 24, 25, 1, 0,
-		26, 28, 2, 0, 24, 25, 30, 30, 2, 0, 33, 34, 36, 38, 293, 0, 80, 1, 0, 0,
-		0, 2, 84, 1, 0, 0, 0, 4, 90, 1, 0, 0, 0, 6, 96, 1, 0, 0, 0, 8, 98, 1, 0,
-		0, 0, 10, 102, 1, 0, 0, 0, 12, 104, 1, 0, 0, 0, 14, 109, 1, 0, 0, 0, 16,
-		116, 1, 0, 0, 0, 18, 118, 1, 0, 0, 0, 20, 126, 1, 0, 0, 0, 22, 129, 1,
-		0, 0, 0, 24, 133, 1, 0, 0, 0, 26, 140, 1, 0, 0, 0, 28, 142, 1, 0, 0, 0,
-		30, 146, 1, 0, 0, 0, 32, 152, 1, 0, 0, 0, 34, 158, 1, 0, 0, 0, 36, 164,
-		1, 0, 0, 0, 38, 168, 1, 0, 0, 0, 40, 172, 1, 0, 0, 0, 42, 174, 1, 0, 0,
-		0, 44, 184, 1, 0, 0, 0, 46, 186, 1, 0, 0, 0, 48, 194, 1, 0, 0, 0, 50, 196,
-		1, 0, 0, 0, 52, 204, 1, 0, 0, 0, 54, 212, 1, 0, 0, 0, 56, 220, 1, 0, 0,
-		0, 58, 228, 1, 0, 0, 0, 60, 236, 1, 0, 0, 0, 62, 247, 1, 0, 0, 0, 64, 249,
-		1, 0, 0, 0, 66, 272, 1, 0, 0, 0, 68, 274, 1, 0, 0, 0, 70, 278, 1, 0, 0,
-		0, 72, 284, 1, 0, 0, 0, 74, 286, 1, 0, 0, 0, 76, 294, 1, 0, 0, 0, 78, 298,
-		1, 0, 0, 0, 80, 81, 3, 2, 1, 0, 81, 82, 5, 0, 0, 1, 82, 1, 1, 0, 0, 0,
-		83, 85, 3, 4, 2, 0, 84, 83, 1, 0, 0, 0, 85, 86, 1, 0, 0, 0, 86, 84, 1,
-		0, 0, 0, 86, 87, 1, 0, 0, 0, 87, 3, 1, 0, 0, 0, 88, 91, 3, 6, 3, 0, 89,
-		91, 3, 16, 8, 0, 90, 88, 1, 0, 0, 0, 90, 89, 1, 0, 0, 0, 91, 5, 1, 0, 0,
-		0, 92, 97, 3, 8, 4, 0, 93, 97, 3, 10, 5, 0, 94, 97, 3, 12, 6, 0, 95, 97,
-		3, 14, 7, 0, 96, 92, 1, 0, 0, 0, 96, 93, 1, 0, 0, 0, 96, 94, 1, 0, 0, 0,
-		96, 95, 1, 0, 0, 0, 97, 7, 1, 0, 0, 0, 98, 99, 3, 64, 32, 0, 99, 100, 5,
-		1, 0, 0, 100, 101, 3, 48, 24, 0, 101, 9, 1, 0, 0, 0, 102, 103, 3, 48, 24,
-		0, 103, 11, 1, 0, 0, 0, 104, 105, 5, 2, 0, 0, 105, 106, 5, 3, 0, 0, 106,
-		107, 3, 40, 20, 0, 107, 108, 5, 4, 0, 0, 108, 13, 1, 0, 0, 0, 109, 110,
-		5, 5, 0, 0, 110, 111, 3, 38, 19, 0, 111, 15, 1, 0, 0, 0, 112, 117, 3, 18,
-		9, 0, 113, 117, 3, 28, 14, 0, 114, 117, 3, 30, 15, 0, 115, 117, 3, 32,
-		16, 0, 116, 112, 1, 0, 0, 0, 116, 113, 1, 0, 0, 0, 116, 114, 1, 0, 0, 0,
-		116, 115, 1, 0, 0, 0, 117, 17, 1, 0, 0, 0, 118, 119, 5, 6, 0, 0, 119, 120,
-		3, 48, 24, 0, 120, 121, 3, 34, 17, 0, 121, 122, 3, 20, 10, 0, 122, 123,
-		3, 26, 13, 0, 123, 19, 1, 0, 0, 0, 124, 127, 1, 0, 0, 0, 125, 127, 3, 22,
-		11, 0, 126, 124, 1, 0, 0, 0, 126, 125, 1, 0, 0, 0, 127, 21, 1, 0, 0, 0,
-		128, 130, 3, 24, 12, 0, 129, 128, 1, 0, 0, 0, 130, 131, 1, 0, 0, 0, 131,
-		129, 1, 0, 0, 0, 131, 132, 1, 0, 0, 0, 132, 23, 1, 0, 0, 0, 133, 134, 5,
-		7, 0, 0, 134, 135, 3, 48, 24, 0, 135, 136, 3, 34, 17, 0, 136, 25, 1, 0,
-		0, 0, 137, 141, 1, 0, 0, 0, 138, 139, 5, 8, 0, 0, 139, 141, 3, 34, 17,
-		0, 140, 137, 1, 0, 0, 0, 140, 138, 1, 0, 0, 0, 141, 27, 1, 0, 0, 0, 142,
-		143, 5, 9, 0, 0, 143, 144, 3, 48, 24, 0, 144, 145, 3, 34, 17, 0, 145, 29,
-		1, 0, 0, 0, 146, 147, 5, 10, 0, 0, 147, 148, 5, 35, 0, 0, 148, 149, 5,
-		11, 0, 0, 149, 150, 3, 48, 24, 0, 150, 151, 3, 34, 17, 0, 151, 31, 1, 0,
-		0, 0, 152, 153, 5, 12, 0, 0, 153, 154, 5, 3, 0, 0, 154, 155, 3, 44, 22,
-		0, 155, 156, 5, 4, 0, 0, 156, 157, 3, 34, 17, 0, 157, 33, 1, 0, 0, 0, 158,
-		159, 5, 13, 0, 0, 159, 160, 3, 36, 18, 0, 160, 161, 5, 14, 0, 0, 161, 35,
-		1, 0, 0, 0, 162, 165, 1, 0, 0, 0, 163, 165, 3, 2, 1, 0, 164, 162, 1, 0,
-		0, 0, 164, 163, 1, 0, 0, 0, 165, 37, 1, 0, 0, 0, 166, 169, 1, 0, 0, 0,
-		167, 169, 3, 48, 24, 0, 168, 166, 1, 0, 0, 0, 168, 167, 1, 0, 0, 0, 169,
-		39, 1, 0, 0, 0, 170, 173, 1, 0, 0, 0, 171, 173, 3, 42, 21, 0, 172, 170,
-		1, 0, 0, 0, 172, 171, 1, 0, 0, 0, 173, 41, 1, 0, 0, 0, 174, 179, 3, 48,
-		24, 0, 175, 176, 5, 15, 0, 0, 176, 178, 3, 48, 24, 0, 177, 175, 1, 0, 0,
-		0, 178, 181, 1, 0, 0, 0, 179, 177, 1, 0, 0, 0, 179, 180, 1, 0, 0, 0, 180,
-		43, 1, 0, 0, 0, 181, 179, 1, 0, 0, 0, 182, 185, 1, 0, 0, 0, 183, 185, 3,
-		46, 23, 0, 184, 182, 1, 0, 0, 0, 184, 183, 1, 0, 0, 0, 185, 45, 1, 0, 0,
-		0, 186, 191, 5, 35, 0, 0, 187, 188, 5, 15, 0, 0, 188, 190, 5, 35, 0, 0,
-		189, 187, 1, 0, 0, 0, 190, 193, 1, 0, 0, 0, 191, 189, 1, 0, 0, 0, 191,
-		192, 1, 0, 0, 0, 192, 47, 1, 0, 0, 0, 193, 191, 1, 0, 0, 0, 194, 195, 3,
-		50, 25, 0, 195, 49, 1, 0, 0, 0, 196, 201, 3, 52, 26, 0, 197, 198, 5, 16,
-		0, 0, 198, 200, 3, 52, 26, 0, 199, 197, 1, 0, 0, 0, 200, 203, 1, 0, 0,
-		0, 201, 199, 1, 0, 0, 0, 201, 202, 1, 0, 0, 0, 202, 51, 1, 0, 0, 0, 203,
-		201, 1, 0, 0, 0, 204, 209, 3, 54, 27, 0, 205, 206, 5, 17, 0, 0, 206, 208,
-		3, 54, 27, 0, 207, 205, 1, 0, 0, 0, 208, 211, 1, 0, 0, 0, 209, 207, 1,
-		0, 0, 0, 209, 210, 1, 0, 0, 0, 210, 53, 1, 0, 0, 0, 211, 209, 1, 0, 0,
-		0, 212, 217, 3, 56, 28, 0, 213, 214, 7, 0, 0, 0, 214, 216, 3, 56, 28, 0,
-		215, 213, 1, 0, 0, 0, 216, 219, 1, 0, 0, 0, 217, 215, 1, 0, 0, 0, 217,
-		218, 1, 0, 0, 0, 218, 55, 1, 0, 0, 0, 219, 217, 1, 0, 0, 0, 220, 225, 3,
-		58, 29, 0, 221, 222, 7, 1, 0, 0, 222, 224, 3, 58, 29, 0, 223, 221, 1, 0,
-		0, 0, 224, 227, 1, 0, 0, 0, 225, 223, 1, 0, 0, 0, 225, 226, 1, 0, 0, 0,
-		226, 57, 1, 0, 0, 0, 227, 225, 1, 0, 0, 0, 228, 233, 3, 60, 30, 0, 229,
-		230, 7, 2, 0, 0, 230, 232, 3, 60, 30, 0, 231, 229, 1, 0, 0, 0, 232, 235,
-		1, 0, 0, 0, 233, 231, 1, 0, 0, 0, 233, 234, 1, 0, 0, 0, 234, 59, 1, 0,
-		0, 0, 235, 233, 1, 0, 0, 0, 236, 241, 3, 62, 31, 0, 237, 238, 5, 29, 0,
-		0, 238, 240, 3, 62, 31, 0, 239, 237, 1, 0, 0, 0, 240, 243, 1, 0, 0, 0,
-		241, 239, 1, 0, 0, 0, 241, 242, 1, 0, 0, 0, 242, 61, 1, 0, 0, 0, 243, 241,
-		1, 0, 0, 0, 244, 245, 7, 3, 0, 0, 245, 248, 3, 62, 31, 0, 246, 248, 3,
-		64, 32, 0, 247, 244, 1, 0, 0, 0, 247, 246, 1, 0, 0, 0, 248, 63, 1, 0, 0,
-		0, 249, 260, 3, 66, 33, 0, 250, 251, 5, 31, 0, 0, 251, 252, 3, 48, 24,
-		0, 252, 253, 5, 32, 0, 0, 253, 259, 1, 0, 0, 0, 254, 255, 5, 3, 0, 0, 255,
-		256, 3, 40, 20, 0, 256, 257, 5, 4, 0, 0, 257, 259, 1, 0, 0, 0, 258, 250,
-		1, 0, 0, 0, 258, 254, 1, 0, 0, 0, 259, 262, 1, 0, 0, 0, 260, 258, 1, 0,
-		0, 0, 260, 261, 1, 0, 0, 0, 261, 65, 1, 0, 0, 0, 262, 260, 1, 0, 0, 0,
-		263, 273, 3, 78, 39, 0, 264, 273, 5, 35, 0, 0, 265, 273, 3, 68, 34, 0,
-		266, 273, 3, 70, 35, 0, 267, 268, 5, 3, 0, 0, 268, 269, 3, 48, 24, 0, 269,
-		270, 5, 4, 0, 0, 270, 273, 1, 0, 0, 0, 271, 273, 3, 32, 16, 0, 272, 263,
-		1, 0, 0, 0, 272, 264, 1, 0, 0, 0, 272, 265, 1, 0, 0, 0, 272, 266, 1, 0,
-		0, 0, 272, 267, 1, 0, 0, 0, 272, 271, 1, 0, 0, 0, 273, 67, 1, 0, 0, 0,
-		274, 275, 5, 31, 0, 0, 275, 276, 3, 40, 20, 0, 276, 277, 5, 32, 0, 0, 277,
-		69, 1, 0, 0, 0, 278, 279, 5, 13, 0, 0, 279, 280, 3, 72, 36, 0, 280, 281,
-		5, 14, 0, 0, 281, 71, 1, 0, 0, 0, 282, 285, 1, 0, 0, 0, 283, 285, 3, 74,
-		37, 0, 284, 282, 1, 0, 0, 0, 284, 283, 1, 0, 0, 0, 285, 73, 1, 0, 0, 0,
-		286, 291, 3, 76, 38, 0, 287, 288, 5, 15, 0, 0, 288, 290, 3, 76, 38, 0,
-		289, 287, 1, 0, 0, 0, 290, 293, 1, 0, 0, 0, 291, 289, 1, 0, 0, 0, 291,
-		292, 1, 0, 0, 0, 292, 75, 1, 0, 0, 0, 293, 291, 1, 0, 0, 0, 294, 295, 5,
-		35, 0, 0, 295, 296, 5, 1, 0, 0, 296, 297, 3, 48, 24, 0, 297, 77, 1, 0,
-		0, 0, 298, 299, 7, 4, 0, 0, 299, 79, 1, 0, 0, 0, 25, 86, 90, 96, 116, 126,
-		131, 140, 164, 168, 172, 179, 184, 191, 201, 209, 217, 225, 233, 241, 247,
-		258, 260, 272, 284, 291,
+		2, 37, 7, 37, 2, 38, 7, 38, 2, 39, 7, 39, 2, 40, 7, 40, 1, 0, 1, 0, 1,
+		0, 1, 1, 4, 1, 87, 8, 1, 11, 1, 12, 1, 88, 1, 2, 1, 2, 3, 2, 93, 8, 2,
+		1, 3, 1, 3, 1, 3, 1, 3, 3, 3, 99, 8, 3, 1, 4, 1, 4, 1, 4, 1, 4, 1, 5, 1,
+		5, 1, 6, 1, 6, 1, 6, 1, 6, 1, 6, 1, 7, 1, 7, 1, 7, 1, 8, 1, 8, 1, 8, 1,
+		8, 3, 8, 119, 8, 8, 1, 9, 1, 9, 1, 9, 1, 9, 1, 9, 1, 9, 1, 10, 1, 10, 3,
+		10, 129, 8, 10, 1, 11, 4, 11, 132, 8, 11, 11, 11, 12, 11, 133, 1, 12, 1,
+		12, 1, 12, 1, 12, 1, 13, 1, 13, 1, 13, 3, 13, 143, 8, 13, 1, 14, 1, 14,
+		1, 14, 1, 14, 1, 15, 1, 15, 1, 15, 1, 15, 1, 15, 1, 15, 1, 16, 1, 16, 1,
+		16, 1, 16, 1, 16, 1, 16, 1, 17, 1, 17, 1, 17, 1, 17, 1, 18, 1, 18, 3, 18,
+		167, 8, 18, 1, 19, 1, 19, 3, 19, 171, 8, 19, 1, 20, 1, 20, 1, 21, 1, 21,
+		1, 21, 5, 21, 178, 8, 21, 10, 21, 12, 21, 181, 9, 21, 1, 22, 1, 22, 1,
+		22, 5, 22, 186, 8, 22, 10, 22, 12, 22, 189, 9, 22, 1, 23, 1, 23, 1, 23,
+		5, 23, 194, 8, 23, 10, 23, 12, 23, 197, 9, 23, 1, 24, 1, 24, 1, 24, 5,
+		24, 202, 8, 24, 10, 24, 12, 24, 205, 9, 24, 1, 25, 1, 25, 1, 25, 5, 25,
+		210, 8, 25, 10, 25, 12, 25, 213, 9, 25, 1, 26, 1, 26, 1, 26, 5, 26, 218,
+		8, 26, 10, 26, 12, 26, 221, 9, 26, 1, 27, 1, 27, 1, 27, 3, 27, 226, 8,
+		27, 1, 28, 1, 28, 1, 28, 1, 28, 1, 28, 1, 28, 1, 28, 1, 28, 1, 28, 5, 28,
+		237, 8, 28, 10, 28, 12, 28, 240, 9, 28, 1, 29, 1, 29, 1, 29, 1, 29, 1,
+		29, 1, 29, 1, 29, 1, 29, 1, 29, 3, 29, 251, 8, 29, 1, 30, 1, 30, 1, 30,
+		1, 30, 1, 30, 1, 30, 1, 31, 1, 31, 1, 31, 1, 31, 1, 32, 1, 32, 1, 32, 1,
+		32, 1, 33, 1, 33, 3, 33, 269, 8, 33, 1, 34, 1, 34, 1, 34, 5, 34, 274, 8,
+		34, 10, 34, 12, 34, 277, 9, 34, 1, 35, 1, 35, 1, 35, 1, 35, 1, 36, 1, 36,
+		1, 37, 1, 37, 3, 37, 287, 8, 37, 1, 38, 1, 38, 1, 38, 5, 38, 292, 8, 38,
+		10, 38, 12, 38, 295, 9, 38, 1, 39, 1, 39, 3, 39, 299, 8, 39, 1, 40, 1,
+		40, 1, 40, 5, 40, 304, 8, 40, 10, 40, 12, 40, 307, 9, 40, 1, 40, 0, 0,
+		41, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34,
+		36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70,
+		72, 74, 76, 78, 80, 0, 5, 1, 0, 17, 22, 1, 0, 23, 24, 1, 0, 25, 27, 2,
+		0, 23, 24, 29, 29, 2, 0, 33, 34, 36, 38, 300, 0, 82, 1, 0, 0, 0, 2, 86,
+		1, 0, 0, 0, 4, 92, 1, 0, 0, 0, 6, 98, 1, 0, 0, 0, 8, 100, 1, 0, 0, 0, 10,
+		104, 1, 0, 0, 0, 12, 106, 1, 0, 0, 0, 14, 111, 1, 0, 0, 0, 16, 118, 1,
+		0, 0, 0, 18, 120, 1, 0, 0, 0, 20, 128, 1, 0, 0, 0, 22, 131, 1, 0, 0, 0,
+		24, 135, 1, 0, 0, 0, 26, 142, 1, 0, 0, 0, 28, 144, 1, 0, 0, 0, 30, 148,
+		1, 0, 0, 0, 32, 154, 1, 0, 0, 0, 34, 160, 1, 0, 0, 0, 36, 166, 1, 0, 0,
+		0, 38, 170, 1, 0, 0, 0, 40, 172, 1, 0, 0, 0, 42, 174, 1, 0, 0, 0, 44, 182,
+		1, 0, 0, 0, 46, 190, 1, 0, 0, 0, 48, 198, 1, 0, 0, 0, 50, 206, 1, 0, 0,
+		0, 52, 214, 1, 0, 0, 0, 54, 225, 1, 0, 0, 0, 56, 227, 1, 0, 0, 0, 58, 250,
+		1, 0, 0, 0, 60, 252, 1, 0, 0, 0, 62, 258, 1, 0, 0, 0, 64, 262, 1, 0, 0,
+		0, 66, 268, 1, 0, 0, 0, 68, 270, 1, 0, 0, 0, 70, 278, 1, 0, 0, 0, 72, 282,
+		1, 0, 0, 0, 74, 286, 1, 0, 0, 0, 76, 288, 1, 0, 0, 0, 78, 298, 1, 0, 0,
+		0, 80, 300, 1, 0, 0, 0, 82, 83, 3, 2, 1, 0, 83, 84, 5, 0, 0, 1, 84, 1,
+		1, 0, 0, 0, 85, 87, 3, 4, 2, 0, 86, 85, 1, 0, 0, 0, 87, 88, 1, 0, 0, 0,
+		88, 86, 1, 0, 0, 0, 88, 89, 1, 0, 0, 0, 89, 3, 1, 0, 0, 0, 90, 93, 3, 6,
+		3, 0, 91, 93, 3, 16, 8, 0, 92, 90, 1, 0, 0, 0, 92, 91, 1, 0, 0, 0, 93,
+		5, 1, 0, 0, 0, 94, 99, 3, 8, 4, 0, 95, 99, 3, 10, 5, 0, 96, 99, 3, 12,
+		6, 0, 97, 99, 3, 14, 7, 0, 98, 94, 1, 0, 0, 0, 98, 95, 1, 0, 0, 0, 98,
+		96, 1, 0, 0, 0, 98, 97, 1, 0, 0, 0, 99, 7, 1, 0, 0, 0, 100, 101, 3, 56,
+		28, 0, 101, 102, 5, 1, 0, 0, 102, 103, 3, 40, 20, 0, 103, 9, 1, 0, 0, 0,
+		104, 105, 3, 40, 20, 0, 105, 11, 1, 0, 0, 0, 106, 107, 5, 2, 0, 0, 107,
+		108, 5, 3, 0, 0, 108, 109, 3, 78, 39, 0, 109, 110, 5, 4, 0, 0, 110, 13,
+		1, 0, 0, 0, 111, 112, 5, 5, 0, 0, 112, 113, 3, 38, 19, 0, 113, 15, 1, 0,
+		0, 0, 114, 119, 3, 18, 9, 0, 115, 119, 3, 28, 14, 0, 116, 119, 3, 30, 15,
+		0, 117, 119, 3, 32, 16, 0, 118, 114, 1, 0, 0, 0, 118, 115, 1, 0, 0, 0,
+		118, 116, 1, 0, 0, 0, 118, 117, 1, 0, 0, 0, 119, 17, 1, 0, 0, 0, 120, 121,
+		5, 6, 0, 0, 121, 122, 3, 40, 20, 0, 122, 123, 3, 34, 17, 0, 123, 124, 3,
+		20, 10, 0, 124, 125, 3, 26, 13, 0, 125, 19, 1, 0, 0, 0, 126, 129, 1, 0,
+		0, 0, 127, 129, 3, 22, 11, 0, 128, 126, 1, 0, 0, 0, 128, 127, 1, 0, 0,
+		0, 129, 21, 1, 0, 0, 0, 130, 132, 3, 24, 12, 0, 131, 130, 1, 0, 0, 0, 132,
+		133, 1, 0, 0, 0, 133, 131, 1, 0, 0, 0, 133, 134, 1, 0, 0, 0, 134, 23, 1,
+		0, 0, 0, 135, 136, 5, 7, 0, 0, 136, 137, 3, 40, 20, 0, 137, 138, 3, 34,
+		17, 0, 138, 25, 1, 0, 0, 0, 139, 143, 1, 0, 0, 0, 140, 141, 5, 8, 0, 0,
+		141, 143, 3, 34, 17, 0, 142, 139, 1, 0, 0, 0, 142, 140, 1, 0, 0, 0, 143,
+		27, 1, 0, 0, 0, 144, 145, 5, 9, 0, 0, 145, 146, 3, 40, 20, 0, 146, 147,
+		3, 34, 17, 0, 147, 29, 1, 0, 0, 0, 148, 149, 5, 10, 0, 0, 149, 150, 5,
+		35, 0, 0, 150, 151, 5, 11, 0, 0, 151, 152, 3, 40, 20, 0, 152, 153, 3, 34,
+		17, 0, 153, 31, 1, 0, 0, 0, 154, 155, 5, 12, 0, 0, 155, 156, 5, 3, 0, 0,
+		156, 157, 3, 74, 37, 0, 157, 158, 5, 4, 0, 0, 158, 159, 3, 34, 17, 0, 159,
+		33, 1, 0, 0, 0, 160, 161, 5, 13, 0, 0, 161, 162, 3, 36, 18, 0, 162, 163,
+		5, 14, 0, 0, 163, 35, 1, 0, 0, 0, 164, 167, 1, 0, 0, 0, 165, 167, 3, 2,
+		1, 0, 166, 164, 1, 0, 0, 0, 166, 165, 1, 0, 0, 0, 167, 37, 1, 0, 0, 0,
+		168, 171, 1, 0, 0, 0, 169, 171, 3, 40, 20, 0, 170, 168, 1, 0, 0, 0, 170,
+		169, 1, 0, 0, 0, 171, 39, 1, 0, 0, 0, 172, 173, 3, 42, 21, 0, 173, 41,
+		1, 0, 0, 0, 174, 179, 3, 44, 22, 0, 175, 176, 5, 15, 0, 0, 176, 178, 3,
+		44, 22, 0, 177, 175, 1, 0, 0, 0, 178, 181, 1, 0, 0, 0, 179, 177, 1, 0,
+		0, 0, 179, 180, 1, 0, 0, 0, 180, 43, 1, 0, 0, 0, 181, 179, 1, 0, 0, 0,
+		182, 187, 3, 46, 23, 0, 183, 184, 5, 16, 0, 0, 184, 186, 3, 46, 23, 0,
+		185, 183, 1, 0, 0, 0, 186, 189, 1, 0, 0, 0, 187, 185, 1, 0, 0, 0, 187,
+		188, 1, 0, 0, 0, 188, 45, 1, 0, 0, 0, 189, 187, 1, 0, 0, 0, 190, 195, 3,
+		48, 24, 0, 191, 192, 7, 0, 0, 0, 192, 194, 3, 48, 24, 0, 193, 191, 1, 0,
+		0, 0, 194, 197, 1, 0, 0, 0, 195, 193, 1, 0, 0, 0, 195, 196, 1, 0, 0, 0,
+		196, 47, 1, 0, 0, 0, 197, 195, 1, 0, 0, 0, 198, 203, 3, 50, 25, 0, 199,
+		200, 7, 1, 0, 0, 200, 202, 3, 50, 25, 0, 201, 199, 1, 0, 0, 0, 202, 205,
+		1, 0, 0, 0, 203, 201, 1, 0, 0, 0, 203, 204, 1, 0, 0, 0, 204, 49, 1, 0,
+		0, 0, 205, 203, 1, 0, 0, 0, 206, 211, 3, 52, 26, 0, 207, 208, 7, 2, 0,
+		0, 208, 210, 3, 52, 26, 0, 209, 207, 1, 0, 0, 0, 210, 213, 1, 0, 0, 0,
+		211, 209, 1, 0, 0, 0, 211, 212, 1, 0, 0, 0, 212, 51, 1, 0, 0, 0, 213, 211,
+		1, 0, 0, 0, 214, 219, 3, 54, 27, 0, 215, 216, 5, 28, 0, 0, 216, 218, 3,
+		54, 27, 0, 217, 215, 1, 0, 0, 0, 218, 221, 1, 0, 0, 0, 219, 217, 1, 0,
+		0, 0, 219, 220, 1, 0, 0, 0, 220, 53, 1, 0, 0, 0, 221, 219, 1, 0, 0, 0,
+		222, 223, 7, 3, 0, 0, 223, 226, 3, 54, 27, 0, 224, 226, 3, 56, 28, 0, 225,
+		222, 1, 0, 0, 0, 225, 224, 1, 0, 0, 0, 226, 55, 1, 0, 0, 0, 227, 238, 3,
+		58, 29, 0, 228, 229, 5, 30, 0, 0, 229, 230, 3, 40, 20, 0, 230, 231, 5,
+		31, 0, 0, 231, 237, 1, 0, 0, 0, 232, 233, 5, 3, 0, 0, 233, 234, 3, 78,
+		39, 0, 234, 235, 5, 4, 0, 0, 235, 237, 1, 0, 0, 0, 236, 228, 1, 0, 0, 0,
+		236, 232, 1, 0, 0, 0, 237, 240, 1, 0, 0, 0, 238, 236, 1, 0, 0, 0, 238,
+		239, 1, 0, 0, 0, 239, 57, 1, 0, 0, 0, 240, 238, 1, 0, 0, 0, 241, 251, 3,
+		72, 36, 0, 242, 251, 5, 35, 0, 0, 243, 251, 3, 62, 31, 0, 244, 251, 3,
+		64, 32, 0, 245, 246, 5, 3, 0, 0, 246, 247, 3, 40, 20, 0, 247, 248, 5, 4,
+		0, 0, 248, 251, 1, 0, 0, 0, 249, 251, 3, 60, 30, 0, 250, 241, 1, 0, 0,
+		0, 250, 242, 1, 0, 0, 0, 250, 243, 1, 0, 0, 0, 250, 244, 1, 0, 0, 0, 250,
+		245, 1, 0, 0, 0, 250, 249, 1, 0, 0, 0, 251, 59, 1, 0, 0, 0, 252, 253, 5,
+		12, 0, 0, 253, 254, 5, 3, 0, 0, 254, 255, 3, 74, 37, 0, 255, 256, 5, 4,
+		0, 0, 256, 257, 3, 34, 17, 0, 257, 61, 1, 0, 0, 0, 258, 259, 5, 30, 0,
+		0, 259, 260, 3, 78, 39, 0, 260, 261, 5, 31, 0, 0, 261, 63, 1, 0, 0, 0,
+		262, 263, 5, 13, 0, 0, 263, 264, 3, 66, 33, 0, 264, 265, 5, 14, 0, 0, 265,
+		65, 1, 0, 0, 0, 266, 269, 1, 0, 0, 0, 267, 269, 3, 68, 34, 0, 268, 266,
+		1, 0, 0, 0, 268, 267, 1, 0, 0, 0, 269, 67, 1, 0, 0, 0, 270, 275, 3, 70,
+		35, 0, 271, 272, 5, 32, 0, 0, 272, 274, 3, 70, 35, 0, 273, 271, 1, 0, 0,
+		0, 274, 277, 1, 0, 0, 0, 275, 273, 1, 0, 0, 0, 275, 276, 1, 0, 0, 0, 276,
+		69, 1, 0, 0, 0, 277, 275, 1, 0, 0, 0, 278, 279, 5, 35, 0, 0, 279, 280,
+		5, 1, 0, 0, 280, 281, 3, 40, 20, 0, 281, 71, 1, 0, 0, 0, 282, 283, 7, 4,
+		0, 0, 283, 73, 1, 0, 0, 0, 284, 287, 1, 0, 0, 0, 285, 287, 3, 76, 38, 0,
+		286, 284, 1, 0, 0, 0, 286, 285, 1, 0, 0, 0, 287, 75, 1, 0, 0, 0, 288, 293,
+		5, 35, 0, 0, 289, 290, 5, 32, 0, 0, 290, 292, 5, 35, 0, 0, 291, 289, 1,
+		0, 0, 0, 292, 295, 1, 0, 0, 0, 293, 291, 1, 0, 0, 0, 293, 294, 1, 0, 0,
+		0, 294, 77, 1, 0, 0, 0, 295, 293, 1, 0, 0, 0, 296, 299, 1, 0, 0, 0, 297,
+		299, 3, 80, 40, 0, 298, 296, 1, 0, 0, 0, 298, 297, 1, 0, 0, 0, 299, 79,
+		1, 0, 0, 0, 300, 305, 3, 40, 20, 0, 301, 302, 5, 32, 0, 0, 302, 304, 3,
+		40, 20, 0, 303, 301, 1, 0, 0, 0, 304, 307, 1, 0, 0, 0, 305, 303, 1, 0,
+		0, 0, 305, 306, 1, 0, 0, 0, 306, 81, 1, 0, 0, 0, 307, 305, 1, 0, 0, 0,
+		25, 88, 92, 98, 118, 128, 133, 142, 166, 170, 179, 187, 195, 203, 211,
+		219, 225, 236, 238, 250, 268, 275, 286, 293, 298, 305,
 	}
 	deserializer := antlr.NewATNDeserializer(nil)
 	staticData.atn = deserializer.Deserialize(staticData.serializedATN)
@@ -285,26 +288,27 @@ const (
 	InscriptParserRULE_block             = 17
 	InscriptParserRULE_statementListOpt  = 18
 	InscriptParserRULE_expressionOpt     = 19
-	InscriptParserRULE_expressionListOpt = 20
-	InscriptParserRULE_expressionList    = 21
-	InscriptParserRULE_paramListOpt      = 22
-	InscriptParserRULE_paramList         = 23
-	InscriptParserRULE_expression        = 24
-	InscriptParserRULE_logicalOr         = 25
-	InscriptParserRULE_logicalAnd        = 26
-	InscriptParserRULE_comparison        = 27
-	InscriptParserRULE_arith             = 28
-	InscriptParserRULE_term              = 29
-	InscriptParserRULE_factor            = 30
-	InscriptParserRULE_unary             = 31
-	InscriptParserRULE_primary           = 32
-	InscriptParserRULE_atom              = 33
-	InscriptParserRULE_listLiteral       = 34
-	InscriptParserRULE_tableLiteral      = 35
-	InscriptParserRULE_fieldListOpt      = 36
-	InscriptParserRULE_fieldList         = 37
-	InscriptParserRULE_field             = 38
-	InscriptParserRULE_literal           = 39
+	InscriptParserRULE_expression        = 20
+	InscriptParserRULE_logicalOr         = 21
+	InscriptParserRULE_logicalAnd        = 22
+	InscriptParserRULE_comparison        = 23
+	InscriptParserRULE_arith             = 24
+	InscriptParserRULE_term              = 25
+	InscriptParserRULE_factor            = 26
+	InscriptParserRULE_unary             = 27
+	InscriptParserRULE_primary           = 28
+	InscriptParserRULE_atom              = 29
+	InscriptParserRULE_fnLiteral         = 30
+	InscriptParserRULE_listLiteral       = 31
+	InscriptParserRULE_tableLiteral      = 32
+	InscriptParserRULE_fieldListOpt      = 33
+	InscriptParserRULE_fieldList         = 34
+	InscriptParserRULE_field             = 35
+	InscriptParserRULE_literal           = 36
+	InscriptParserRULE_paramListOpt      = 37
+	InscriptParserRULE_paramList         = 38
+	InscriptParserRULE_expressionListOpt = 39
+	InscriptParserRULE_expressionList    = 40
 )
 
 // IProgramContext is an interface to support dynamic dispatch.
@@ -409,11 +413,11 @@ func (p *InscriptParser) Program() (localctx IProgramContext) {
 	p.EnterRule(localctx, 0, InscriptParserRULE_program)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(80)
+		p.SetState(82)
 		p.StatementList()
 	}
 	{
-		p.SetState(81)
+		p.SetState(83)
 		p.Match(InscriptParserEOF)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -558,20 +562,20 @@ func (p *InscriptParser) StatementList() (localctx IStatementListContext) {
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(84)
+	p.SetState(86)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for ok := true; ok; ok = ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&544437450348) != 0) {
+	for ok := true; ok; ok = ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&542801671788) != 0) {
 		{
-			p.SetState(83)
+			p.SetState(85)
 			p.Statement()
 		}
 
-		p.SetState(86)
+		p.SetState(88)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -704,7 +708,7 @@ func (s *StatementContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 func (p *InscriptParser) Statement() (localctx IStatementContext) {
 	localctx = NewStatementContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 4, InscriptParserRULE_statement)
-	p.SetState(90)
+	p.SetState(92)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -714,14 +718,14 @@ func (p *InscriptParser) Statement() (localctx IStatementContext) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(88)
+			p.SetState(90)
 			p.SimpleStmt()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(89)
+			p.SetState(91)
 			p.CompoundStmt()
 		}
 
@@ -888,7 +892,7 @@ func (s *SimpleStmtContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 func (p *InscriptParser) SimpleStmt() (localctx ISimpleStmtContext) {
 	localctx = NewSimpleStmtContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 6, InscriptParserRULE_simpleStmt)
-	p.SetState(96)
+	p.SetState(98)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -898,28 +902,28 @@ func (p *InscriptParser) SimpleStmt() (localctx ISimpleStmtContext) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(92)
+			p.SetState(94)
 			p.Assignment()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(93)
+			p.SetState(95)
 			p.ExprStmt()
 		}
 
 	case 3:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(94)
+			p.SetState(96)
 			p.PrintStmt()
 		}
 
 	case 4:
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(95)
+			p.SetState(97)
 			p.ReturnStmt()
 		}
 
@@ -1054,11 +1058,11 @@ func (p *InscriptParser) Assignment() (localctx IAssignmentContext) {
 	p.EnterRule(localctx, 8, InscriptParserRULE_assignment)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(98)
+		p.SetState(100)
 		p.Primary()
 	}
 	{
-		p.SetState(99)
+		p.SetState(101)
 		p.Match(InscriptParserT__0)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1066,7 +1070,7 @@ func (p *InscriptParser) Assignment() (localctx IAssignmentContext) {
 		}
 	}
 	{
-		p.SetState(100)
+		p.SetState(102)
 		p.Expression()
 	}
 
@@ -1180,7 +1184,7 @@ func (p *InscriptParser) ExprStmt() (localctx IExprStmtContext) {
 	p.EnterRule(localctx, 10, InscriptParserRULE_exprStmt)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(102)
+		p.SetState(104)
 		p.Expression()
 	}
 
@@ -1294,7 +1298,7 @@ func (p *InscriptParser) PrintStmt() (localctx IPrintStmtContext) {
 	p.EnterRule(localctx, 12, InscriptParserRULE_printStmt)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(104)
+		p.SetState(106)
 		p.Match(InscriptParserT__1)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1302,7 +1306,7 @@ func (p *InscriptParser) PrintStmt() (localctx IPrintStmtContext) {
 		}
 	}
 	{
-		p.SetState(105)
+		p.SetState(107)
 		p.Match(InscriptParserT__2)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1310,11 +1314,11 @@ func (p *InscriptParser) PrintStmt() (localctx IPrintStmtContext) {
 		}
 	}
 	{
-		p.SetState(106)
+		p.SetState(108)
 		p.ExpressionListOpt()
 	}
 	{
-		p.SetState(107)
+		p.SetState(109)
 		p.Match(InscriptParserT__3)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1432,7 +1436,7 @@ func (p *InscriptParser) ReturnStmt() (localctx IReturnStmtContext) {
 	p.EnterRule(localctx, 14, InscriptParserRULE_returnStmt)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(109)
+		p.SetState(111)
 		p.Match(InscriptParserT__4)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1440,7 +1444,7 @@ func (p *InscriptParser) ReturnStmt() (localctx IReturnStmtContext) {
 		}
 	}
 	{
-		p.SetState(110)
+		p.SetState(112)
 		p.ExpressionOpt()
 	}
 
@@ -1603,7 +1607,7 @@ func (s *CompoundStmtContext) Accept(visitor antlr.ParseTreeVisitor) interface{}
 func (p *InscriptParser) CompoundStmt() (localctx ICompoundStmtContext) {
 	localctx = NewCompoundStmtContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 16, InscriptParserRULE_compoundStmt)
-	p.SetState(116)
+	p.SetState(118)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -1613,28 +1617,28 @@ func (p *InscriptParser) CompoundStmt() (localctx ICompoundStmtContext) {
 	case InscriptParserT__5:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(112)
+			p.SetState(114)
 			p.IfStmt()
 		}
 
 	case InscriptParserT__8:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(113)
+			p.SetState(115)
 			p.WhileStmt()
 		}
 
 	case InscriptParserT__9:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(114)
+			p.SetState(116)
 			p.ForStmt()
 		}
 
 	case InscriptParserT__11:
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(115)
+			p.SetState(117)
 			p.FunctionDef()
 		}
 
@@ -1804,7 +1808,7 @@ func (p *InscriptParser) IfStmt() (localctx IIfStmtContext) {
 	p.EnterRule(localctx, 18, InscriptParserRULE_ifStmt)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(118)
+		p.SetState(120)
 		p.Match(InscriptParserT__5)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1812,19 +1816,19 @@ func (p *InscriptParser) IfStmt() (localctx IIfStmtContext) {
 		}
 	}
 	{
-		p.SetState(119)
+		p.SetState(121)
 		p.Expression()
 	}
 	{
-		p.SetState(120)
+		p.SetState(122)
 		p.Block()
 	}
 	{
-		p.SetState(121)
+		p.SetState(123)
 		p.ElseifListOpt()
 	}
 	{
-		p.SetState(122)
+		p.SetState(124)
 		p.ElseBlockOpt()
 	}
 
@@ -1936,20 +1940,20 @@ func (s *ElseifListOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{
 func (p *InscriptParser) ElseifListOpt() (localctx IElseifListOptContext) {
 	localctx = NewElseifListOptContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 20, InscriptParserRULE_elseifListOpt)
-	p.SetState(126)
+	p.SetState(128)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__7, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__7, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__22, InscriptParserT__23, InscriptParserT__28, InscriptParserT__29, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 1)
 
 	case InscriptParserT__6:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(125)
+			p.SetState(127)
 			p.ElseifList()
 		}
 
@@ -2095,7 +2099,7 @@ func (p *InscriptParser) ElseifList() (localctx IElseifListContext) {
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(129)
+	p.SetState(131)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -2104,11 +2108,11 @@ func (p *InscriptParser) ElseifList() (localctx IElseifListContext) {
 
 	for ok := true; ok; ok = _la == InscriptParserT__6 {
 		{
-			p.SetState(128)
+			p.SetState(130)
 			p.Elseif()
 		}
 
-		p.SetState(131)
+		p.SetState(133)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -2243,7 +2247,7 @@ func (p *InscriptParser) Elseif() (localctx IElseifContext) {
 	p.EnterRule(localctx, 24, InscriptParserRULE_elseif)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(133)
+		p.SetState(135)
 		p.Match(InscriptParserT__6)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2251,11 +2255,11 @@ func (p *InscriptParser) Elseif() (localctx IElseifContext) {
 		}
 	}
 	{
-		p.SetState(134)
+		p.SetState(136)
 		p.Expression()
 	}
 	{
-		p.SetState(135)
+		p.SetState(137)
 		p.Block()
 	}
 
@@ -2367,20 +2371,20 @@ func (s *ElseBlockOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{}
 func (p *InscriptParser) ElseBlockOpt() (localctx IElseBlockOptContext) {
 	localctx = NewElseBlockOptContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 26, InscriptParserRULE_elseBlockOpt)
-	p.SetState(140)
+	p.SetState(142)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+	case InscriptParserEOF, InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__13, InscriptParserT__22, InscriptParserT__23, InscriptParserT__28, InscriptParserT__29, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 1)
 
 	case InscriptParserT__7:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(138)
+			p.SetState(140)
 			p.Match(InscriptParserT__7)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2388,7 +2392,7 @@ func (p *InscriptParser) ElseBlockOpt() (localctx IElseBlockOptContext) {
 			}
 		}
 		{
-			p.SetState(139)
+			p.SetState(141)
 			p.Block()
 		}
 
@@ -2524,7 +2528,7 @@ func (p *InscriptParser) WhileStmt() (localctx IWhileStmtContext) {
 	p.EnterRule(localctx, 28, InscriptParserRULE_whileStmt)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(142)
+		p.SetState(144)
 		p.Match(InscriptParserT__8)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2532,11 +2536,11 @@ func (p *InscriptParser) WhileStmt() (localctx IWhileStmtContext) {
 		}
 	}
 	{
-		p.SetState(143)
+		p.SetState(145)
 		p.Expression()
 	}
 	{
-		p.SetState(144)
+		p.SetState(146)
 		p.Block()
 	}
 
@@ -2672,7 +2676,7 @@ func (p *InscriptParser) ForStmt() (localctx IForStmtContext) {
 	p.EnterRule(localctx, 30, InscriptParserRULE_forStmt)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(146)
+		p.SetState(148)
 		p.Match(InscriptParserT__9)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2680,7 +2684,7 @@ func (p *InscriptParser) ForStmt() (localctx IForStmtContext) {
 		}
 	}
 	{
-		p.SetState(147)
+		p.SetState(149)
 		p.Match(InscriptParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2688,7 +2692,7 @@ func (p *InscriptParser) ForStmt() (localctx IForStmtContext) {
 		}
 	}
 	{
-		p.SetState(148)
+		p.SetState(150)
 		p.Match(InscriptParserT__10)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2696,11 +2700,11 @@ func (p *InscriptParser) ForStmt() (localctx IForStmtContext) {
 		}
 	}
 	{
-		p.SetState(149)
+		p.SetState(151)
 		p.Expression()
 	}
 	{
-		p.SetState(150)
+		p.SetState(152)
 		p.Block()
 	}
 
@@ -2831,7 +2835,7 @@ func (p *InscriptParser) FunctionDef() (localctx IFunctionDefContext) {
 	p.EnterRule(localctx, 32, InscriptParserRULE_functionDef)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(152)
+		p.SetState(154)
 		p.Match(InscriptParserT__11)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2839,7 +2843,7 @@ func (p *InscriptParser) FunctionDef() (localctx IFunctionDefContext) {
 		}
 	}
 	{
-		p.SetState(153)
+		p.SetState(155)
 		p.Match(InscriptParserT__2)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2847,11 +2851,11 @@ func (p *InscriptParser) FunctionDef() (localctx IFunctionDefContext) {
 		}
 	}
 	{
-		p.SetState(154)
+		p.SetState(156)
 		p.ParamListOpt()
 	}
 	{
-		p.SetState(155)
+		p.SetState(157)
 		p.Match(InscriptParserT__3)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2859,7 +2863,7 @@ func (p *InscriptParser) FunctionDef() (localctx IFunctionDefContext) {
 		}
 	}
 	{
-		p.SetState(156)
+		p.SetState(158)
 		p.Block()
 	}
 
@@ -2973,7 +2977,7 @@ func (p *InscriptParser) Block() (localctx IBlockContext) {
 	p.EnterRule(localctx, 34, InscriptParserRULE_block)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(158)
+		p.SetState(160)
 		p.Match(InscriptParserT__12)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -2981,11 +2985,11 @@ func (p *InscriptParser) Block() (localctx IBlockContext) {
 		}
 	}
 	{
-		p.SetState(159)
+		p.SetState(161)
 		p.StatementListOpt()
 	}
 	{
-		p.SetState(160)
+		p.SetState(162)
 		p.Match(InscriptParserT__13)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -3101,7 +3105,7 @@ func (s *StatementListOptContext) Accept(visitor antlr.ParseTreeVisitor) interfa
 func (p *InscriptParser) StatementListOpt() (localctx IStatementListOptContext) {
 	localctx = NewStatementListOptContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 36, InscriptParserRULE_statementListOpt)
-	p.SetState(164)
+	p.SetState(166)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -3111,10 +3115,10 @@ func (p *InscriptParser) StatementListOpt() (localctx IStatementListOptContext) 
 	case InscriptParserT__13:
 		p.EnterOuterAlt(localctx, 1)
 
-	case InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+	case InscriptParserT__1, InscriptParserT__2, InscriptParserT__4, InscriptParserT__5, InscriptParserT__8, InscriptParserT__9, InscriptParserT__11, InscriptParserT__12, InscriptParserT__22, InscriptParserT__23, InscriptParserT__28, InscriptParserT__29, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(163)
+			p.SetState(165)
 			p.StatementList()
 		}
 
@@ -3231,7 +3235,7 @@ func (s *ExpressionOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{
 func (p *InscriptParser) ExpressionOpt() (localctx IExpressionOptContext) {
 	localctx = NewExpressionOptContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 38, InscriptParserRULE_expressionOpt)
-	p.SetState(168)
+	p.SetState(170)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -3244,587 +3248,12 @@ func (p *InscriptParser) ExpressionOpt() (localctx IExpressionOptContext) {
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(167)
+			p.SetState(169)
 			p.Expression()
 		}
 
 	case antlr.ATNInvalidAltNumber:
 		goto errorExit
-	}
-
-errorExit:
-	if p.HasError() {
-		v := p.GetError()
-		localctx.SetException(v)
-		p.GetErrorHandler().ReportError(p, v)
-		p.GetErrorHandler().Recover(p, v)
-		p.SetError(nil)
-	}
-	p.ExitRule()
-	return localctx
-	goto errorExit // Trick to prevent compiler error if the label is not used
-}
-
-// IExpressionListOptContext is an interface to support dynamic dispatch.
-type IExpressionListOptContext interface {
-	antlr.ParserRuleContext
-
-	// GetParser returns the parser.
-	GetParser() antlr.Parser
-
-	// Getter signatures
-	ExpressionList() IExpressionListContext
-
-	// IsExpressionListOptContext differentiates from other interfaces.
-	IsExpressionListOptContext()
-}
-
-type ExpressionListOptContext struct {
-	antlr.BaseParserRuleContext
-	parser antlr.Parser
-}
-
-func NewEmptyExpressionListOptContext() *ExpressionListOptContext {
-	var p = new(ExpressionListOptContext)
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_expressionListOpt
-	return p
-}
-
-func InitEmptyExpressionListOptContext(p *ExpressionListOptContext) {
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_expressionListOpt
-}
-
-func (*ExpressionListOptContext) IsExpressionListOptContext() {}
-
-func NewExpressionListOptContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ExpressionListOptContext {
-	var p = new(ExpressionListOptContext)
-
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
-
-	p.parser = parser
-	p.RuleIndex = InscriptParserRULE_expressionListOpt
-
-	return p
-}
-
-func (s *ExpressionListOptContext) GetParser() antlr.Parser { return s.parser }
-
-func (s *ExpressionListOptContext) ExpressionList() IExpressionListContext {
-	var t antlr.RuleContext
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IExpressionListContext); ok {
-			t = ctx.(antlr.RuleContext)
-			break
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(IExpressionListContext)
-}
-
-func (s *ExpressionListOptContext) GetRuleContext() antlr.RuleContext {
-	return s
-}
-
-func (s *ExpressionListOptContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
-	return antlr.TreesStringTree(s, ruleNames, recog)
-}
-
-func (s *ExpressionListOptContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.EnterExpressionListOpt(s)
-	}
-}
-
-func (s *ExpressionListOptContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.ExitExpressionListOpt(s)
-	}
-}
-
-func (s *ExpressionListOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
-	switch t := visitor.(type) {
-	case InscriptVisitor:
-		return t.VisitExpressionListOpt(s)
-
-	default:
-		return t.VisitChildren(s)
-	}
-}
-
-func (p *InscriptParser) ExpressionListOpt() (localctx IExpressionListOptContext) {
-	localctx = NewExpressionListOptContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 40, InscriptParserRULE_expressionListOpt)
-	p.SetState(172)
-	p.GetErrorHandler().Sync(p)
-	if p.HasError() {
-		goto errorExit
-	}
-
-	switch p.GetTokenStream().LA(1) {
-	case InscriptParserT__3, InscriptParserT__31:
-		p.EnterOuterAlt(localctx, 1)
-
-	case InscriptParserT__2, InscriptParserT__11, InscriptParserT__12, InscriptParserT__23, InscriptParserT__24, InscriptParserT__29, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
-		p.EnterOuterAlt(localctx, 2)
-		{
-			p.SetState(171)
-			p.ExpressionList()
-		}
-
-	default:
-		p.SetError(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
-		goto errorExit
-	}
-
-errorExit:
-	if p.HasError() {
-		v := p.GetError()
-		localctx.SetException(v)
-		p.GetErrorHandler().ReportError(p, v)
-		p.GetErrorHandler().Recover(p, v)
-		p.SetError(nil)
-	}
-	p.ExitRule()
-	return localctx
-	goto errorExit // Trick to prevent compiler error if the label is not used
-}
-
-// IExpressionListContext is an interface to support dynamic dispatch.
-type IExpressionListContext interface {
-	antlr.ParserRuleContext
-
-	// GetParser returns the parser.
-	GetParser() antlr.Parser
-
-	// Getter signatures
-	AllExpression() []IExpressionContext
-	Expression(i int) IExpressionContext
-
-	// IsExpressionListContext differentiates from other interfaces.
-	IsExpressionListContext()
-}
-
-type ExpressionListContext struct {
-	antlr.BaseParserRuleContext
-	parser antlr.Parser
-}
-
-func NewEmptyExpressionListContext() *ExpressionListContext {
-	var p = new(ExpressionListContext)
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_expressionList
-	return p
-}
-
-func InitEmptyExpressionListContext(p *ExpressionListContext) {
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_expressionList
-}
-
-func (*ExpressionListContext) IsExpressionListContext() {}
-
-func NewExpressionListContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ExpressionListContext {
-	var p = new(ExpressionListContext)
-
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
-
-	p.parser = parser
-	p.RuleIndex = InscriptParserRULE_expressionList
-
-	return p
-}
-
-func (s *ExpressionListContext) GetParser() antlr.Parser { return s.parser }
-
-func (s *ExpressionListContext) AllExpression() []IExpressionContext {
-	children := s.GetChildren()
-	len := 0
-	for _, ctx := range children {
-		if _, ok := ctx.(IExpressionContext); ok {
-			len++
-		}
-	}
-
-	tst := make([]IExpressionContext, len)
-	i := 0
-	for _, ctx := range children {
-		if t, ok := ctx.(IExpressionContext); ok {
-			tst[i] = t.(IExpressionContext)
-			i++
-		}
-	}
-
-	return tst
-}
-
-func (s *ExpressionListContext) Expression(i int) IExpressionContext {
-	var t antlr.RuleContext
-	j := 0
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IExpressionContext); ok {
-			if j == i {
-				t = ctx.(antlr.RuleContext)
-				break
-			}
-			j++
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(IExpressionContext)
-}
-
-func (s *ExpressionListContext) GetRuleContext() antlr.RuleContext {
-	return s
-}
-
-func (s *ExpressionListContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
-	return antlr.TreesStringTree(s, ruleNames, recog)
-}
-
-func (s *ExpressionListContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.EnterExpressionList(s)
-	}
-}
-
-func (s *ExpressionListContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.ExitExpressionList(s)
-	}
-}
-
-func (s *ExpressionListContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
-	switch t := visitor.(type) {
-	case InscriptVisitor:
-		return t.VisitExpressionList(s)
-
-	default:
-		return t.VisitChildren(s)
-	}
-}
-
-func (p *InscriptParser) ExpressionList() (localctx IExpressionListContext) {
-	localctx = NewExpressionListContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 42, InscriptParserRULE_expressionList)
-	var _la int
-
-	p.EnterOuterAlt(localctx, 1)
-	{
-		p.SetState(174)
-		p.Expression()
-	}
-	p.SetState(179)
-	p.GetErrorHandler().Sync(p)
-	if p.HasError() {
-		goto errorExit
-	}
-	_la = p.GetTokenStream().LA(1)
-
-	for _la == InscriptParserT__14 {
-		{
-			p.SetState(175)
-			p.Match(InscriptParserT__14)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
-			}
-		}
-		{
-			p.SetState(176)
-			p.Expression()
-		}
-
-		p.SetState(181)
-		p.GetErrorHandler().Sync(p)
-		if p.HasError() {
-			goto errorExit
-		}
-		_la = p.GetTokenStream().LA(1)
-	}
-
-errorExit:
-	if p.HasError() {
-		v := p.GetError()
-		localctx.SetException(v)
-		p.GetErrorHandler().ReportError(p, v)
-		p.GetErrorHandler().Recover(p, v)
-		p.SetError(nil)
-	}
-	p.ExitRule()
-	return localctx
-	goto errorExit // Trick to prevent compiler error if the label is not used
-}
-
-// IParamListOptContext is an interface to support dynamic dispatch.
-type IParamListOptContext interface {
-	antlr.ParserRuleContext
-
-	// GetParser returns the parser.
-	GetParser() antlr.Parser
-
-	// Getter signatures
-	ParamList() IParamListContext
-
-	// IsParamListOptContext differentiates from other interfaces.
-	IsParamListOptContext()
-}
-
-type ParamListOptContext struct {
-	antlr.BaseParserRuleContext
-	parser antlr.Parser
-}
-
-func NewEmptyParamListOptContext() *ParamListOptContext {
-	var p = new(ParamListOptContext)
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_paramListOpt
-	return p
-}
-
-func InitEmptyParamListOptContext(p *ParamListOptContext) {
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_paramListOpt
-}
-
-func (*ParamListOptContext) IsParamListOptContext() {}
-
-func NewParamListOptContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ParamListOptContext {
-	var p = new(ParamListOptContext)
-
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
-
-	p.parser = parser
-	p.RuleIndex = InscriptParserRULE_paramListOpt
-
-	return p
-}
-
-func (s *ParamListOptContext) GetParser() antlr.Parser { return s.parser }
-
-func (s *ParamListOptContext) ParamList() IParamListContext {
-	var t antlr.RuleContext
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IParamListContext); ok {
-			t = ctx.(antlr.RuleContext)
-			break
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(IParamListContext)
-}
-
-func (s *ParamListOptContext) GetRuleContext() antlr.RuleContext {
-	return s
-}
-
-func (s *ParamListOptContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
-	return antlr.TreesStringTree(s, ruleNames, recog)
-}
-
-func (s *ParamListOptContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.EnterParamListOpt(s)
-	}
-}
-
-func (s *ParamListOptContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.ExitParamListOpt(s)
-	}
-}
-
-func (s *ParamListOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
-	switch t := visitor.(type) {
-	case InscriptVisitor:
-		return t.VisitParamListOpt(s)
-
-	default:
-		return t.VisitChildren(s)
-	}
-}
-
-func (p *InscriptParser) ParamListOpt() (localctx IParamListOptContext) {
-	localctx = NewParamListOptContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 44, InscriptParserRULE_paramListOpt)
-	p.SetState(184)
-	p.GetErrorHandler().Sync(p)
-	if p.HasError() {
-		goto errorExit
-	}
-
-	switch p.GetTokenStream().LA(1) {
-	case InscriptParserT__3:
-		p.EnterOuterAlt(localctx, 1)
-
-	case InscriptParserIDENTIFIER:
-		p.EnterOuterAlt(localctx, 2)
-		{
-			p.SetState(183)
-			p.ParamList()
-		}
-
-	default:
-		p.SetError(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
-		goto errorExit
-	}
-
-errorExit:
-	if p.HasError() {
-		v := p.GetError()
-		localctx.SetException(v)
-		p.GetErrorHandler().ReportError(p, v)
-		p.GetErrorHandler().Recover(p, v)
-		p.SetError(nil)
-	}
-	p.ExitRule()
-	return localctx
-	goto errorExit // Trick to prevent compiler error if the label is not used
-}
-
-// IParamListContext is an interface to support dynamic dispatch.
-type IParamListContext interface {
-	antlr.ParserRuleContext
-
-	// GetParser returns the parser.
-	GetParser() antlr.Parser
-
-	// Getter signatures
-	AllIDENTIFIER() []antlr.TerminalNode
-	IDENTIFIER(i int) antlr.TerminalNode
-
-	// IsParamListContext differentiates from other interfaces.
-	IsParamListContext()
-}
-
-type ParamListContext struct {
-	antlr.BaseParserRuleContext
-	parser antlr.Parser
-}
-
-func NewEmptyParamListContext() *ParamListContext {
-	var p = new(ParamListContext)
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_paramList
-	return p
-}
-
-func InitEmptyParamListContext(p *ParamListContext) {
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = InscriptParserRULE_paramList
-}
-
-func (*ParamListContext) IsParamListContext() {}
-
-func NewParamListContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ParamListContext {
-	var p = new(ParamListContext)
-
-	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
-
-	p.parser = parser
-	p.RuleIndex = InscriptParserRULE_paramList
-
-	return p
-}
-
-func (s *ParamListContext) GetParser() antlr.Parser { return s.parser }
-
-func (s *ParamListContext) AllIDENTIFIER() []antlr.TerminalNode {
-	return s.GetTokens(InscriptParserIDENTIFIER)
-}
-
-func (s *ParamListContext) IDENTIFIER(i int) antlr.TerminalNode {
-	return s.GetToken(InscriptParserIDENTIFIER, i)
-}
-
-func (s *ParamListContext) GetRuleContext() antlr.RuleContext {
-	return s
-}
-
-func (s *ParamListContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
-	return antlr.TreesStringTree(s, ruleNames, recog)
-}
-
-func (s *ParamListContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.EnterParamList(s)
-	}
-}
-
-func (s *ParamListContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(InscriptListener); ok {
-		listenerT.ExitParamList(s)
-	}
-}
-
-func (s *ParamListContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
-	switch t := visitor.(type) {
-	case InscriptVisitor:
-		return t.VisitParamList(s)
-
-	default:
-		return t.VisitChildren(s)
-	}
-}
-
-func (p *InscriptParser) ParamList() (localctx IParamListContext) {
-	localctx = NewParamListContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 46, InscriptParserRULE_paramList)
-	var _la int
-
-	p.EnterOuterAlt(localctx, 1)
-	{
-		p.SetState(186)
-		p.Match(InscriptParserIDENTIFIER)
-		if p.HasError() {
-			// Recognition error - abort rule
-			goto errorExit
-		}
-	}
-	p.SetState(191)
-	p.GetErrorHandler().Sync(p)
-	if p.HasError() {
-		goto errorExit
-	}
-	_la = p.GetTokenStream().LA(1)
-
-	for _la == InscriptParserT__14 {
-		{
-			p.SetState(187)
-			p.Match(InscriptParserT__14)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
-			}
-		}
-		{
-			p.SetState(188)
-			p.Match(InscriptParserIDENTIFIER)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
-			}
-		}
-
-		p.SetState(193)
-		p.GetErrorHandler().Sync(p)
-		if p.HasError() {
-			goto errorExit
-		}
-		_la = p.GetTokenStream().LA(1)
 	}
 
 errorExit:
@@ -3934,10 +3363,10 @@ func (s *ExpressionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Expression() (localctx IExpressionContext) {
 	localctx = NewExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 48, InscriptParserRULE_expression)
+	p.EnterRule(localctx, 40, InscriptParserRULE_expression)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(194)
+		p.SetState(172)
 		p.LogicalOr()
 	}
 
@@ -4074,36 +3503,36 @@ func (s *LogicalOrContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) LogicalOr() (localctx ILogicalOrContext) {
 	localctx = NewLogicalOrContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 50, InscriptParserRULE_logicalOr)
+	p.EnterRule(localctx, 42, InscriptParserRULE_logicalOr)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(196)
+		p.SetState(174)
 		p.LogicalAnd()
 	}
-	p.SetState(201)
+	p.SetState(179)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == InscriptParserT__15 {
+	for _la == InscriptParserT__14 {
 		{
-			p.SetState(197)
-			p.Match(InscriptParserT__15)
+			p.SetState(175)
+			p.Match(InscriptParserT__14)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(198)
+			p.SetState(176)
 			p.LogicalAnd()
 		}
 
-		p.SetState(203)
+		p.SetState(181)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -4244,36 +3673,36 @@ func (s *LogicalAndContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) LogicalAnd() (localctx ILogicalAndContext) {
 	localctx = NewLogicalAndContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 52, InscriptParserRULE_logicalAnd)
+	p.EnterRule(localctx, 44, InscriptParserRULE_logicalAnd)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(204)
+		p.SetState(182)
 		p.Comparison()
 	}
-	p.SetState(209)
+	p.SetState(187)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == InscriptParserT__16 {
+	for _la == InscriptParserT__15 {
 		{
-			p.SetState(205)
-			p.Match(InscriptParserT__16)
+			p.SetState(183)
+			p.Match(InscriptParserT__15)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(206)
+			p.SetState(184)
 			p.Comparison()
 		}
 
-		p.SetState(211)
+		p.SetState(189)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -4301,12 +3730,6 @@ type IComparisonContext interface {
 	// GetParser returns the parser.
 	GetParser() antlr.Parser
 
-	// GetCmpOp returns the cmpOp token.
-	GetCmpOp() antlr.Token
-
-	// SetCmpOp sets the cmpOp token.
-	SetCmpOp(antlr.Token)
-
 	// Getter signatures
 	AllArith() []IArithContext
 	Arith(i int) IArithContext
@@ -4318,7 +3741,6 @@ type IComparisonContext interface {
 type ComparisonContext struct {
 	antlr.BaseParserRuleContext
 	parser antlr.Parser
-	cmpOp  antlr.Token
 }
 
 func NewEmptyComparisonContext() *ComparisonContext {
@@ -4347,10 +3769,6 @@ func NewComparisonContext(parser antlr.Parser, parent antlr.ParserRuleContext, i
 }
 
 func (s *ComparisonContext) GetParser() antlr.Parser { return s.parser }
-
-func (s *ComparisonContext) GetCmpOp() antlr.Token { return s.cmpOp }
-
-func (s *ComparisonContext) SetCmpOp(v antlr.Token) { s.cmpOp = v }
 
 func (s *ComparisonContext) AllArith() []IArithContext {
 	children := s.GetChildren()
@@ -4425,46 +3843,39 @@ func (s *ComparisonContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Comparison() (localctx IComparisonContext) {
 	localctx = NewComparisonContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 54, InscriptParserRULE_comparison)
+	p.EnterRule(localctx, 46, InscriptParserRULE_comparison)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(212)
+		p.SetState(190)
 		p.Arith()
 	}
-	p.SetState(217)
+	p.SetState(195)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&16515072) != 0 {
+	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8257536) != 0 {
 		{
-			p.SetState(213)
-
-			var _lt = p.GetTokenStream().LT(1)
-
-			localctx.(*ComparisonContext).cmpOp = _lt
-
+			p.SetState(191)
 			_la = p.GetTokenStream().LA(1)
 
-			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&16515072) != 0) {
-				var _ri = p.GetErrorHandler().RecoverInline(p)
-
-				localctx.(*ComparisonContext).cmpOp = _ri
+			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8257536) != 0) {
+				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
 				p.Consume()
 			}
 		}
 		{
-			p.SetState(214)
+			p.SetState(192)
 			p.Arith()
 		}
 
-		p.SetState(219)
+		p.SetState(197)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -4492,12 +3903,6 @@ type IArithContext interface {
 	// GetParser returns the parser.
 	GetParser() antlr.Parser
 
-	// GetOp returns the op token.
-	GetOp() antlr.Token
-
-	// SetOp sets the op token.
-	SetOp(antlr.Token)
-
 	// Getter signatures
 	AllTerm() []ITermContext
 	Term(i int) ITermContext
@@ -4509,7 +3914,6 @@ type IArithContext interface {
 type ArithContext struct {
 	antlr.BaseParserRuleContext
 	parser antlr.Parser
-	op     antlr.Token
 }
 
 func NewEmptyArithContext() *ArithContext {
@@ -4538,10 +3942,6 @@ func NewArithContext(parser antlr.Parser, parent antlr.ParserRuleContext, invoki
 }
 
 func (s *ArithContext) GetParser() antlr.Parser { return s.parser }
-
-func (s *ArithContext) GetOp() antlr.Token { return s.op }
-
-func (s *ArithContext) SetOp(v antlr.Token) { s.op = v }
 
 func (s *ArithContext) AllTerm() []ITermContext {
 	children := s.GetChildren()
@@ -4616,57 +4016,50 @@ func (s *ArithContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Arith() (localctx IArithContext) {
 	localctx = NewArithContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 56, InscriptParserRULE_arith)
+	p.EnterRule(localctx, 48, InscriptParserRULE_arith)
 	var _la int
 
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(220)
+		p.SetState(198)
 		p.Term()
 	}
-	p.SetState(225)
+	p.SetState(203)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
-	_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 16, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 12, p.GetParserRuleContext())
 	if p.HasError() {
 		goto errorExit
 	}
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
 			{
-				p.SetState(221)
-
-				var _lt = p.GetTokenStream().LT(1)
-
-				localctx.(*ArithContext).op = _lt
-
+				p.SetState(199)
 				_la = p.GetTokenStream().LA(1)
 
-				if !(_la == InscriptParserT__23 || _la == InscriptParserT__24) {
-					var _ri = p.GetErrorHandler().RecoverInline(p)
-
-					localctx.(*ArithContext).op = _ri
+				if !(_la == InscriptParserT__22 || _la == InscriptParserT__23) {
+					p.GetErrorHandler().RecoverInline(p)
 				} else {
 					p.GetErrorHandler().ReportMatch(p)
 					p.Consume()
 				}
 			}
 			{
-				p.SetState(222)
+				p.SetState(200)
 				p.Term()
 			}
 
 		}
-		p.SetState(227)
+		p.SetState(205)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
 		}
-		_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 16, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 12, p.GetParserRuleContext())
 		if p.HasError() {
 			goto errorExit
 		}
@@ -4805,27 +4198,27 @@ func (s *TermContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Term() (localctx ITermContext) {
 	localctx = NewTermContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 58, InscriptParserRULE_term)
+	p.EnterRule(localctx, 50, InscriptParserRULE_term)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(228)
+		p.SetState(206)
 		p.Factor()
 	}
-	p.SetState(233)
+	p.SetState(211)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&469762048) != 0 {
+	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&234881024) != 0 {
 		{
-			p.SetState(229)
+			p.SetState(207)
 			_la = p.GetTokenStream().LA(1)
 
-			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&469762048) != 0) {
+			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&234881024) != 0) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -4833,11 +4226,11 @@ func (p *InscriptParser) Term() (localctx ITermContext) {
 			}
 		}
 		{
-			p.SetState(230)
+			p.SetState(208)
 			p.Factor()
 		}
 
-		p.SetState(235)
+		p.SetState(213)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -4978,36 +4371,36 @@ func (s *FactorContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Factor() (localctx IFactorContext) {
 	localctx = NewFactorContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 60, InscriptParserRULE_factor)
+	p.EnterRule(localctx, 52, InscriptParserRULE_factor)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(236)
+		p.SetState(214)
 		p.Unary()
 	}
-	p.SetState(241)
+	p.SetState(219)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == InscriptParserT__28 {
+	for _la == InscriptParserT__27 {
 		{
-			p.SetState(237)
-			p.Match(InscriptParserT__28)
+			p.SetState(215)
+			p.Match(InscriptParserT__27)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(238)
+			p.SetState(216)
 			p.Unary()
 		}
 
-		p.SetState(243)
+		p.SetState(221)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -5139,23 +4532,23 @@ func (s *UnaryContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Unary() (localctx IUnaryContext) {
 	localctx = NewUnaryContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 62, InscriptParserRULE_unary)
+	p.EnterRule(localctx, 54, InscriptParserRULE_unary)
 	var _la int
 
-	p.SetState(247)
+	p.SetState(225)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case InscriptParserT__23, InscriptParserT__24, InscriptParserT__29:
+	case InscriptParserT__22, InscriptParserT__23, InscriptParserT__28:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(244)
+			p.SetState(222)
 			_la = p.GetTokenStream().LA(1)
 
-			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&1124073472) != 0) {
+			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&562036736) != 0) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -5163,14 +4556,14 @@ func (p *InscriptParser) Unary() (localctx IUnaryContext) {
 			}
 		}
 		{
-			p.SetState(245)
+			p.SetState(223)
 			p.Unary()
 		}
 
-	case InscriptParserT__2, InscriptParserT__11, InscriptParserT__12, InscriptParserT__30, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+	case InscriptParserT__2, InscriptParserT__11, InscriptParserT__12, InscriptParserT__29, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(246)
+			p.SetState(224)
 			p.Primary()
 		}
 
@@ -5372,48 +4765,48 @@ func (s *PrimaryContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Primary() (localctx IPrimaryContext) {
 	localctx = NewPrimaryContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 64, InscriptParserRULE_primary)
+	p.EnterRule(localctx, 56, InscriptParserRULE_primary)
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(249)
+		p.SetState(227)
 		p.Atom()
 	}
-	p.SetState(260)
+	p.SetState(238)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
-	_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 21, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 17, p.GetParserRuleContext())
 	if p.HasError() {
 		goto errorExit
 	}
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
-			p.SetState(258)
+			p.SetState(236)
 			p.GetErrorHandler().Sync(p)
 			if p.HasError() {
 				goto errorExit
 			}
 
 			switch p.GetTokenStream().LA(1) {
-			case InscriptParserT__30:
+			case InscriptParserT__29:
 				{
-					p.SetState(250)
-					p.Match(InscriptParserT__30)
+					p.SetState(228)
+					p.Match(InscriptParserT__29)
 					if p.HasError() {
 						// Recognition error - abort rule
 						goto errorExit
 					}
 				}
 				{
-					p.SetState(251)
+					p.SetState(229)
 					p.Expression()
 				}
 				{
-					p.SetState(252)
-					p.Match(InscriptParserT__31)
+					p.SetState(230)
+					p.Match(InscriptParserT__30)
 					if p.HasError() {
 						// Recognition error - abort rule
 						goto errorExit
@@ -5422,7 +4815,7 @@ func (p *InscriptParser) Primary() (localctx IPrimaryContext) {
 
 			case InscriptParserT__2:
 				{
-					p.SetState(254)
+					p.SetState(232)
 					p.Match(InscriptParserT__2)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -5430,11 +4823,11 @@ func (p *InscriptParser) Primary() (localctx IPrimaryContext) {
 					}
 				}
 				{
-					p.SetState(255)
+					p.SetState(233)
 					p.ExpressionListOpt()
 				}
 				{
-					p.SetState(256)
+					p.SetState(234)
 					p.Match(InscriptParserT__3)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -5448,12 +4841,12 @@ func (p *InscriptParser) Primary() (localctx IPrimaryContext) {
 			}
 
 		}
-		p.SetState(262)
+		p.SetState(240)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
 		}
-		_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 21, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 17, p.GetParserRuleContext())
 		if p.HasError() {
 			goto errorExit
 		}
@@ -5485,7 +4878,7 @@ type IAtomContext interface {
 	ListLiteral() IListLiteralContext
 	TableLiteral() ITableLiteralContext
 	Expression() IExpressionContext
-	FunctionDef() IFunctionDefContext
+	FnLiteral() IFnLiteralContext
 
 	// IsAtomContext differentiates from other interfaces.
 	IsAtomContext()
@@ -5591,10 +4984,10 @@ func (s *AtomContext) Expression() IExpressionContext {
 	return t.(IExpressionContext)
 }
 
-func (s *AtomContext) FunctionDef() IFunctionDefContext {
+func (s *AtomContext) FnLiteral() IFnLiteralContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IFunctionDefContext); ok {
+		if _, ok := ctx.(IFnLiteralContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -5604,7 +4997,7 @@ func (s *AtomContext) FunctionDef() IFunctionDefContext {
 		return nil
 	}
 
-	return t.(IFunctionDefContext)
+	return t.(IFnLiteralContext)
 }
 
 func (s *AtomContext) GetRuleContext() antlr.RuleContext {
@@ -5639,8 +5032,8 @@ func (s *AtomContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Atom() (localctx IAtomContext) {
 	localctx = NewAtomContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 66, InscriptParserRULE_atom)
-	p.SetState(272)
+	p.EnterRule(localctx, 58, InscriptParserRULE_atom)
+	p.SetState(250)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -5650,14 +5043,14 @@ func (p *InscriptParser) Atom() (localctx IAtomContext) {
 	case InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(263)
+			p.SetState(241)
 			p.Literal()
 		}
 
 	case InscriptParserIDENTIFIER:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(264)
+			p.SetState(242)
 			p.Match(InscriptParserIDENTIFIER)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -5665,24 +5058,24 @@ func (p *InscriptParser) Atom() (localctx IAtomContext) {
 			}
 		}
 
-	case InscriptParserT__30:
+	case InscriptParserT__29:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(265)
+			p.SetState(243)
 			p.ListLiteral()
 		}
 
 	case InscriptParserT__12:
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(266)
+			p.SetState(244)
 			p.TableLiteral()
 		}
 
 	case InscriptParserT__2:
 		p.EnterOuterAlt(localctx, 5)
 		{
-			p.SetState(267)
+			p.SetState(245)
 			p.Match(InscriptParserT__2)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -5690,11 +5083,11 @@ func (p *InscriptParser) Atom() (localctx IAtomContext) {
 			}
 		}
 		{
-			p.SetState(268)
+			p.SetState(246)
 			p.Expression()
 		}
 		{
-			p.SetState(269)
+			p.SetState(247)
 			p.Match(InscriptParserT__3)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -5705,13 +5098,172 @@ func (p *InscriptParser) Atom() (localctx IAtomContext) {
 	case InscriptParserT__11:
 		p.EnterOuterAlt(localctx, 6)
 		{
-			p.SetState(271)
-			p.FunctionDef()
+			p.SetState(249)
+			p.FnLiteral()
 		}
 
 	default:
 		p.SetError(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 		goto errorExit
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IFnLiteralContext is an interface to support dynamic dispatch.
+type IFnLiteralContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	ParamListOpt() IParamListOptContext
+	Block() IBlockContext
+
+	// IsFnLiteralContext differentiates from other interfaces.
+	IsFnLiteralContext()
+}
+
+type FnLiteralContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyFnLiteralContext() *FnLiteralContext {
+	var p = new(FnLiteralContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_fnLiteral
+	return p
+}
+
+func InitEmptyFnLiteralContext(p *FnLiteralContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_fnLiteral
+}
+
+func (*FnLiteralContext) IsFnLiteralContext() {}
+
+func NewFnLiteralContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *FnLiteralContext {
+	var p = new(FnLiteralContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = InscriptParserRULE_fnLiteral
+
+	return p
+}
+
+func (s *FnLiteralContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *FnLiteralContext) ParamListOpt() IParamListOptContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IParamListOptContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IParamListOptContext)
+}
+
+func (s *FnLiteralContext) Block() IBlockContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IBlockContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IBlockContext)
+}
+
+func (s *FnLiteralContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *FnLiteralContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *FnLiteralContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.EnterFnLiteral(s)
+	}
+}
+
+func (s *FnLiteralContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.ExitFnLiteral(s)
+	}
+}
+
+func (s *FnLiteralContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case InscriptVisitor:
+		return t.VisitFnLiteral(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
+func (p *InscriptParser) FnLiteral() (localctx IFnLiteralContext) {
+	localctx = NewFnLiteralContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 60, InscriptParserRULE_fnLiteral)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(252)
+		p.Match(InscriptParserT__11)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(253)
+		p.Match(InscriptParserT__2)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(254)
+		p.ParamListOpt()
+	}
+	{
+		p.SetState(255)
+		p.Match(InscriptParserT__3)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(256)
+		p.Block()
 	}
 
 errorExit:
@@ -5821,23 +5373,23 @@ func (s *ListLiteralContext) Accept(visitor antlr.ParseTreeVisitor) interface{} 
 
 func (p *InscriptParser) ListLiteral() (localctx IListLiteralContext) {
 	localctx = NewListLiteralContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 68, InscriptParserRULE_listLiteral)
+	p.EnterRule(localctx, 62, InscriptParserRULE_listLiteral)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(274)
-		p.Match(InscriptParserT__30)
+		p.SetState(258)
+		p.Match(InscriptParserT__29)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
 	{
-		p.SetState(275)
+		p.SetState(259)
 		p.ExpressionListOpt()
 	}
 	{
-		p.SetState(276)
-		p.Match(InscriptParserT__31)
+		p.SetState(260)
+		p.Match(InscriptParserT__30)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
@@ -5951,10 +5503,10 @@ func (s *TableLiteralContext) Accept(visitor antlr.ParseTreeVisitor) interface{}
 
 func (p *InscriptParser) TableLiteral() (localctx ITableLiteralContext) {
 	localctx = NewTableLiteralContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 70, InscriptParserRULE_tableLiteral)
+	p.EnterRule(localctx, 64, InscriptParserRULE_tableLiteral)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(278)
+		p.SetState(262)
 		p.Match(InscriptParserT__12)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -5962,11 +5514,11 @@ func (p *InscriptParser) TableLiteral() (localctx ITableLiteralContext) {
 		}
 	}
 	{
-		p.SetState(279)
+		p.SetState(263)
 		p.FieldListOpt()
 	}
 	{
-		p.SetState(280)
+		p.SetState(264)
 		p.Match(InscriptParserT__13)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -6081,8 +5633,8 @@ func (s *FieldListOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{}
 
 func (p *InscriptParser) FieldListOpt() (localctx IFieldListOptContext) {
 	localctx = NewFieldListOptContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 72, InscriptParserRULE_fieldListOpt)
-	p.SetState(284)
+	p.EnterRule(localctx, 66, InscriptParserRULE_fieldListOpt)
+	p.SetState(268)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -6095,7 +5647,7 @@ func (p *InscriptParser) FieldListOpt() (localctx IFieldListOptContext) {
 	case InscriptParserIDENTIFIER:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(283)
+			p.SetState(267)
 			p.FieldList()
 		}
 
@@ -6237,36 +5789,36 @@ func (s *FieldListContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) FieldList() (localctx IFieldListContext) {
 	localctx = NewFieldListContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 74, InscriptParserRULE_fieldList)
+	p.EnterRule(localctx, 68, InscriptParserRULE_fieldList)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(286)
+		p.SetState(270)
 		p.Field()
 	}
-	p.SetState(291)
+	p.SetState(275)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == InscriptParserT__14 {
+	for _la == InscriptParserT__31 {
 		{
-			p.SetState(287)
-			p.Match(InscriptParserT__14)
+			p.SetState(271)
+			p.Match(InscriptParserT__31)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(288)
+			p.SetState(272)
 			p.Field()
 		}
 
-		p.SetState(293)
+		p.SetState(277)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -6386,10 +5938,10 @@ func (s *FieldContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Field() (localctx IFieldContext) {
 	localctx = NewFieldContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 76, InscriptParserRULE_field)
+	p.EnterRule(localctx, 70, InscriptParserRULE_field)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(294)
+		p.SetState(278)
 		p.Match(InscriptParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -6397,7 +5949,7 @@ func (p *InscriptParser) Field() (localctx IFieldContext) {
 		}
 	}
 	{
-		p.SetState(295)
+		p.SetState(279)
 		p.Match(InscriptParserT__0)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -6405,7 +5957,7 @@ func (p *InscriptParser) Field() (localctx IFieldContext) {
 		}
 	}
 	{
-		p.SetState(296)
+		p.SetState(280)
 		p.Expression()
 	}
 
@@ -6519,12 +6071,12 @@ func (s *LiteralContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 
 func (p *InscriptParser) Literal() (localctx ILiteralContext) {
 	localctx = NewLiteralContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 78, InscriptParserRULE_literal)
+	p.EnterRule(localctx, 72, InscriptParserRULE_literal)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(298)
+		p.SetState(282)
 		_la = p.GetTokenStream().LA(1)
 
 		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&506806140928) != 0) {
@@ -6533,6 +6085,581 @@ func (p *InscriptParser) Literal() (localctx ILiteralContext) {
 			p.GetErrorHandler().ReportMatch(p)
 			p.Consume()
 		}
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IParamListOptContext is an interface to support dynamic dispatch.
+type IParamListOptContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	ParamList() IParamListContext
+
+	// IsParamListOptContext differentiates from other interfaces.
+	IsParamListOptContext()
+}
+
+type ParamListOptContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyParamListOptContext() *ParamListOptContext {
+	var p = new(ParamListOptContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_paramListOpt
+	return p
+}
+
+func InitEmptyParamListOptContext(p *ParamListOptContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_paramListOpt
+}
+
+func (*ParamListOptContext) IsParamListOptContext() {}
+
+func NewParamListOptContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ParamListOptContext {
+	var p = new(ParamListOptContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = InscriptParserRULE_paramListOpt
+
+	return p
+}
+
+func (s *ParamListOptContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *ParamListOptContext) ParamList() IParamListContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IParamListContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IParamListContext)
+}
+
+func (s *ParamListOptContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *ParamListOptContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *ParamListOptContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.EnterParamListOpt(s)
+	}
+}
+
+func (s *ParamListOptContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.ExitParamListOpt(s)
+	}
+}
+
+func (s *ParamListOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case InscriptVisitor:
+		return t.VisitParamListOpt(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
+func (p *InscriptParser) ParamListOpt() (localctx IParamListOptContext) {
+	localctx = NewParamListOptContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 74, InscriptParserRULE_paramListOpt)
+	p.SetState(286)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+
+	switch p.GetTokenStream().LA(1) {
+	case InscriptParserT__3:
+		p.EnterOuterAlt(localctx, 1)
+
+	case InscriptParserIDENTIFIER:
+		p.EnterOuterAlt(localctx, 2)
+		{
+			p.SetState(285)
+			p.ParamList()
+		}
+
+	default:
+		p.SetError(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
+		goto errorExit
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IParamListContext is an interface to support dynamic dispatch.
+type IParamListContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	AllIDENTIFIER() []antlr.TerminalNode
+	IDENTIFIER(i int) antlr.TerminalNode
+
+	// IsParamListContext differentiates from other interfaces.
+	IsParamListContext()
+}
+
+type ParamListContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyParamListContext() *ParamListContext {
+	var p = new(ParamListContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_paramList
+	return p
+}
+
+func InitEmptyParamListContext(p *ParamListContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_paramList
+}
+
+func (*ParamListContext) IsParamListContext() {}
+
+func NewParamListContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ParamListContext {
+	var p = new(ParamListContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = InscriptParserRULE_paramList
+
+	return p
+}
+
+func (s *ParamListContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *ParamListContext) AllIDENTIFIER() []antlr.TerminalNode {
+	return s.GetTokens(InscriptParserIDENTIFIER)
+}
+
+func (s *ParamListContext) IDENTIFIER(i int) antlr.TerminalNode {
+	return s.GetToken(InscriptParserIDENTIFIER, i)
+}
+
+func (s *ParamListContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *ParamListContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *ParamListContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.EnterParamList(s)
+	}
+}
+
+func (s *ParamListContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.ExitParamList(s)
+	}
+}
+
+func (s *ParamListContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case InscriptVisitor:
+		return t.VisitParamList(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
+func (p *InscriptParser) ParamList() (localctx IParamListContext) {
+	localctx = NewParamListContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 76, InscriptParserRULE_paramList)
+	var _la int
+
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(288)
+		p.Match(InscriptParserIDENTIFIER)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	p.SetState(293)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+	_la = p.GetTokenStream().LA(1)
+
+	for _la == InscriptParserT__31 {
+		{
+			p.SetState(289)
+			p.Match(InscriptParserT__31)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(290)
+			p.Match(InscriptParserIDENTIFIER)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+
+		p.SetState(295)
+		p.GetErrorHandler().Sync(p)
+		if p.HasError() {
+			goto errorExit
+		}
+		_la = p.GetTokenStream().LA(1)
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IExpressionListOptContext is an interface to support dynamic dispatch.
+type IExpressionListOptContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	ExpressionList() IExpressionListContext
+
+	// IsExpressionListOptContext differentiates from other interfaces.
+	IsExpressionListOptContext()
+}
+
+type ExpressionListOptContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyExpressionListOptContext() *ExpressionListOptContext {
+	var p = new(ExpressionListOptContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_expressionListOpt
+	return p
+}
+
+func InitEmptyExpressionListOptContext(p *ExpressionListOptContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_expressionListOpt
+}
+
+func (*ExpressionListOptContext) IsExpressionListOptContext() {}
+
+func NewExpressionListOptContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ExpressionListOptContext {
+	var p = new(ExpressionListOptContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = InscriptParserRULE_expressionListOpt
+
+	return p
+}
+
+func (s *ExpressionListOptContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *ExpressionListOptContext) ExpressionList() IExpressionListContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IExpressionListContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IExpressionListContext)
+}
+
+func (s *ExpressionListOptContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *ExpressionListOptContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *ExpressionListOptContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.EnterExpressionListOpt(s)
+	}
+}
+
+func (s *ExpressionListOptContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.ExitExpressionListOpt(s)
+	}
+}
+
+func (s *ExpressionListOptContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case InscriptVisitor:
+		return t.VisitExpressionListOpt(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
+func (p *InscriptParser) ExpressionListOpt() (localctx IExpressionListOptContext) {
+	localctx = NewExpressionListOptContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 78, InscriptParserRULE_expressionListOpt)
+	p.SetState(298)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+
+	switch p.GetTokenStream().LA(1) {
+	case InscriptParserT__3, InscriptParserT__30:
+		p.EnterOuterAlt(localctx, 1)
+
+	case InscriptParserT__2, InscriptParserT__11, InscriptParserT__12, InscriptParserT__22, InscriptParserT__23, InscriptParserT__28, InscriptParserT__29, InscriptParserT__32, InscriptParserBOOLEAN, InscriptParserIDENTIFIER, InscriptParserINTEGER, InscriptParserFLOAT, InscriptParserSTRING:
+		p.EnterOuterAlt(localctx, 2)
+		{
+			p.SetState(297)
+			p.ExpressionList()
+		}
+
+	default:
+		p.SetError(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
+		goto errorExit
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IExpressionListContext is an interface to support dynamic dispatch.
+type IExpressionListContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	AllExpression() []IExpressionContext
+	Expression(i int) IExpressionContext
+
+	// IsExpressionListContext differentiates from other interfaces.
+	IsExpressionListContext()
+}
+
+type ExpressionListContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyExpressionListContext() *ExpressionListContext {
+	var p = new(ExpressionListContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_expressionList
+	return p
+}
+
+func InitEmptyExpressionListContext(p *ExpressionListContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = InscriptParserRULE_expressionList
+}
+
+func (*ExpressionListContext) IsExpressionListContext() {}
+
+func NewExpressionListContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ExpressionListContext {
+	var p = new(ExpressionListContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = InscriptParserRULE_expressionList
+
+	return p
+}
+
+func (s *ExpressionListContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *ExpressionListContext) AllExpression() []IExpressionContext {
+	children := s.GetChildren()
+	len := 0
+	for _, ctx := range children {
+		if _, ok := ctx.(IExpressionContext); ok {
+			len++
+		}
+	}
+
+	tst := make([]IExpressionContext, len)
+	i := 0
+	for _, ctx := range children {
+		if t, ok := ctx.(IExpressionContext); ok {
+			tst[i] = t.(IExpressionContext)
+			i++
+		}
+	}
+
+	return tst
+}
+
+func (s *ExpressionListContext) Expression(i int) IExpressionContext {
+	var t antlr.RuleContext
+	j := 0
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IExpressionContext); ok {
+			if j == i {
+				t = ctx.(antlr.RuleContext)
+				break
+			}
+			j++
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IExpressionContext)
+}
+
+func (s *ExpressionListContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *ExpressionListContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *ExpressionListContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.EnterExpressionList(s)
+	}
+}
+
+func (s *ExpressionListContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(InscriptListener); ok {
+		listenerT.ExitExpressionList(s)
+	}
+}
+
+func (s *ExpressionListContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case InscriptVisitor:
+		return t.VisitExpressionList(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
+func (p *InscriptParser) ExpressionList() (localctx IExpressionListContext) {
+	localctx = NewExpressionListContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 80, InscriptParserRULE_expressionList)
+	var _la int
+
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(300)
+		p.Expression()
+	}
+	p.SetState(305)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+	_la = p.GetTokenStream().LA(1)
+
+	for _la == InscriptParserT__31 {
+		{
+			p.SetState(301)
+			p.Match(InscriptParserT__31)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(302)
+			p.Expression()
+		}
+
+		p.SetState(307)
+		p.GetErrorHandler().Sync(p)
+		if p.HasError() {
+			goto errorExit
+		}
+		_la = p.GetTokenStream().LA(1)
 	}
 
 errorExit:

@@ -31,23 +31,23 @@ elseBlockOpt        : /* empty */ | 'else' block;
 
 whileStmt           : 'while' expression block;
 forStmt             : 'for' IDENTIFIER 'in' expression block;
+
+// Function definitions
 functionDef         : 'function' '(' paramListOpt ')' block;
 
+// Block for statements
 block               : '{' statementListOpt '}';
 statementListOpt    : /* empty */ | statementList;
 
+// Optional expression
 expressionOpt       : /* empty */ | expression;
-expressionListOpt   : /* empty */ | expressionList;
-expressionList      : expression (',' expression)*;
 
-paramListOpt        : /* empty */ | paramList;
-paramList           : IDENTIFIER (',' IDENTIFIER)*;
-
+// Expression and parameters
 expression          : logicalOr;
 logicalOr           : logicalAnd ('or' logicalAnd)*;
 logicalAnd          : comparison ('and' comparison)*;
-comparison          : arith ( cmpOp=('==' | '!=' | '<' | '>' | '<=' | '>=') arith )*;
-arith               : term ( op=('+' | '-') term )*;
+comparison          : arith (('==' | '!=' | '<' | '>' | '<=' | '>=') arith)*;
+arith               : term (('+' | '-') term)*;
 term                : factor (('*' | '/' | '%') factor)*;
 factor              : unary ('^' unary)*;
 unary               : ('+' | '-' | 'not') unary
@@ -60,9 +60,13 @@ atom                : literal
                     | listLiteral
                     | tableLiteral
                     | '(' expression ')'
-                    | functionDef
+                    | fnLiteral
                     ;
 
+// Function literal (expression)
+fnLiteral           : 'function' '(' paramListOpt ')' block;
+
+// Literals and collections
 listLiteral         : '[' expressionListOpt ']';
 tableLiteral        : '{' fieldListOpt '}';
 fieldListOpt        : /* empty */ | fieldList;
@@ -72,26 +76,27 @@ field               : IDENTIFIER '=' expression;
 literal             : INTEGER
                     | FLOAT
                     | STRING
-                    | BOOLEAN // Moved BOOLEAN here
+                    | BOOLEAN
                     | 'nil'
                     ;
 
-// Lexer rules
-// IMPORTANT: Order matters! BOOLEAN must come before IDENTIFIER
-BOOLEAN             : 'true' | 'false'; // Defined before IDENTIFIER
-IDENTIFIER          : LETTER (LETTER | DIGIT | '_')*;
+paramListOpt        : /* empty */ | paramList;
+paramList           : IDENTIFIER (',' IDENTIFIER)*;
 
+expressionListOpt   : /* empty */ | expressionList;
+expressionList      : expression (',' expression)*;
+
+// Lexer rules
+BOOLEAN             : 'true' | 'false';
+IDENTIFIER          : LETTER (LETTER | DIGIT | '_')*;
 INTEGER             : DIGIT+;
 FLOAT               : DIGIT+ '.' DIGIT+;
 STRING              : '"' (ESC_SEQ | ~["\\])* '"';
 
-
-// Fragments (These are correct as helper rules for lexer rules)
 fragment DIGIT      : [0-9];
 fragment LETTER     : [a-zA-Z_];
 fragment ESC_SEQ    : '\\' ["'\\ntbr];
 
-// Skip whitespace and comments
 WS                  : [ \t\r\n]+ -> skip;
 LINE_COMMENT        : '//' ~[\r\n]* -> skip;
 BLOCK_COMMENT       : '/*' .*? '*/' -> skip;

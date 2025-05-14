@@ -88,22 +88,6 @@ func (v *BaseInscriptVisitor) VisitExpressionOpt(ctx *ExpressionOptContext) inte
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseInscriptVisitor) VisitExpressionListOpt(ctx *ExpressionListOptContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseInscriptVisitor) VisitExpressionList(ctx *ExpressionListContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseInscriptVisitor) VisitParamListOpt(ctx *ParamListOptContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseInscriptVisitor) VisitParamList(ctx *ParamListContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseInscriptVisitor) VisitExpression(ctx *ExpressionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -144,6 +128,10 @@ func (v *BaseInscriptVisitor) VisitAtom(ctx *AtomContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseInscriptVisitor) VisitFnLiteral(ctx *FnLiteralContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseInscriptVisitor) VisitListLiteral(ctx *ListLiteralContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -165,5 +153,21 @@ func (v *BaseInscriptVisitor) VisitField(ctx *FieldContext) interface{} {
 }
 
 func (v *BaseInscriptVisitor) VisitLiteral(ctx *LiteralContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseInscriptVisitor) VisitParamListOpt(ctx *ParamListOptContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseInscriptVisitor) VisitParamList(ctx *ParamListContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseInscriptVisitor) VisitExpressionListOpt(ctx *ExpressionListOptContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseInscriptVisitor) VisitExpressionList(ctx *ExpressionListContext) interface{} {
 	return v.VisitChildren(ctx)
 }
