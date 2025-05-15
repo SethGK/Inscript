@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/SethGK/Inscript/internal/ast"      // Import AST package
-	"github.com/SethGK/Inscript/internal/compiler" // Import Compiler package
-	"github.com/SethGK/Inscript/internal/types"
+	"github.com/SethGK/Inscript/internal/ast"          // Import AST package
+	"github.com/SethGK/Inscript/internal/compiler"     // Import Compiler package
+	"github.com/SethGK/Inscript/internal/types"        // Import types package
 	"github.com/SethGK/Inscript/internal/vm"           // Import VM package
 	parser "github.com/SethGK/Inscript/parser/grammar" // Import the ANTLR generated parser package
 	"github.com/antlr4-go/antlr/v4"                    // Import ANTLR runtime

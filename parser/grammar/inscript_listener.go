@@ -11,9 +11,6 @@ type InscriptListener interface {
 	// EnterProgram is called when entering the program production.
 	EnterProgram(c *ProgramContext)
 
-	// EnterStatementList is called when entering the statementList production.
-	EnterStatementList(c *StatementListContext)
-
 	// EnterStatement is called when entering the statement production.
 	EnterStatement(c *StatementContext)
 
@@ -41,9 +38,6 @@ type InscriptListener interface {
 	// EnterElseifListOpt is called when entering the elseifListOpt production.
 	EnterElseifListOpt(c *ElseifListOptContext)
 
-	// EnterElseifList is called when entering the elseifList production.
-	EnterElseifList(c *ElseifListContext)
-
 	// EnterElseif is called when entering the elseif production.
 	EnterElseif(c *ElseifContext)
 
@@ -64,9 +58,6 @@ type InscriptListener interface {
 
 	// EnterStatementListOpt is called when entering the statementListOpt production.
 	EnterStatementListOpt(c *StatementListOptContext)
-
-	// EnterExpressionOpt is called when entering the expressionOpt production.
-	EnterExpressionOpt(c *ExpressionOptContext)
 
 	// EnterExpression is called when entering the expression production.
 	EnterExpression(c *ExpressionContext)
@@ -110,20 +101,11 @@ type InscriptListener interface {
 	// EnterFieldListOpt is called when entering the fieldListOpt production.
 	EnterFieldListOpt(c *FieldListOptContext)
 
-	// EnterFieldList is called when entering the fieldList production.
-	EnterFieldList(c *FieldListContext)
-
 	// EnterField is called when entering the field production.
 	EnterField(c *FieldContext)
 
-	// EnterLiteral is called when entering the literal production.
-	EnterLiteral(c *LiteralContext)
-
-	// EnterParamListOpt is called when entering the paramListOpt production.
-	EnterParamListOpt(c *ParamListOptContext)
-
-	// EnterParamList is called when entering the paramList production.
-	EnterParamList(c *ParamListContext)
+	// EnterExpressionOpt is called when entering the expressionOpt production.
+	EnterExpressionOpt(c *ExpressionOptContext)
 
 	// EnterExpressionListOpt is called when entering the expressionListOpt production.
 	EnterExpressionListOpt(c *ExpressionListOptContext)
@@ -131,11 +113,17 @@ type InscriptListener interface {
 	// EnterExpressionList is called when entering the expressionList production.
 	EnterExpressionList(c *ExpressionListContext)
 
+	// EnterParamListOpt is called when entering the paramListOpt production.
+	EnterParamListOpt(c *ParamListOptContext)
+
+	// EnterParamList is called when entering the paramList production.
+	EnterParamList(c *ParamListContext)
+
+	// EnterLiteral is called when entering the literal production.
+	EnterLiteral(c *LiteralContext)
+
 	// ExitProgram is called when exiting the program production.
 	ExitProgram(c *ProgramContext)
-
-	// ExitStatementList is called when exiting the statementList production.
-	ExitStatementList(c *StatementListContext)
 
 	// ExitStatement is called when exiting the statement production.
 	ExitStatement(c *StatementContext)
@@ -164,9 +152,6 @@ type InscriptListener interface {
 	// ExitElseifListOpt is called when exiting the elseifListOpt production.
 	ExitElseifListOpt(c *ElseifListOptContext)
 
-	// ExitElseifList is called when exiting the elseifList production.
-	ExitElseifList(c *ElseifListContext)
-
 	// ExitElseif is called when exiting the elseif production.
 	ExitElseif(c *ElseifContext)
 
@@ -187,9 +172,6 @@ type InscriptListener interface {
 
 	// ExitStatementListOpt is called when exiting the statementListOpt production.
 	ExitStatementListOpt(c *StatementListOptContext)
-
-	// ExitExpressionOpt is called when exiting the expressionOpt production.
-	ExitExpressionOpt(c *ExpressionOptContext)
 
 	// ExitExpression is called when exiting the expression production.
 	ExitExpression(c *ExpressionContext)
@@ -233,14 +215,17 @@ type InscriptListener interface {
 	// ExitFieldListOpt is called when exiting the fieldListOpt production.
 	ExitFieldListOpt(c *FieldListOptContext)
 
-	// ExitFieldList is called when exiting the fieldList production.
-	ExitFieldList(c *FieldListContext)
-
 	// ExitField is called when exiting the field production.
 	ExitField(c *FieldContext)
 
-	// ExitLiteral is called when exiting the literal production.
-	ExitLiteral(c *LiteralContext)
+	// ExitExpressionOpt is called when exiting the expressionOpt production.
+	ExitExpressionOpt(c *ExpressionOptContext)
+
+	// ExitExpressionListOpt is called when exiting the expressionListOpt production.
+	ExitExpressionListOpt(c *ExpressionListOptContext)
+
+	// ExitExpressionList is called when exiting the expressionList production.
+	ExitExpressionList(c *ExpressionListContext)
 
 	// ExitParamListOpt is called when exiting the paramListOpt production.
 	ExitParamListOpt(c *ParamListOptContext)
@@ -248,9 +233,6 @@ type InscriptListener interface {
 	// ExitParamList is called when exiting the paramList production.
 	ExitParamList(c *ParamListContext)
 
-	// ExitExpressionListOpt is called when exiting the expressionListOpt production.
-	ExitExpressionListOpt(c *ExpressionListOptContext)
-
-	// ExitExpressionList is called when exiting the expressionList production.
-	ExitExpressionList(c *ExpressionListContext)
+	// ExitLiteral is called when exiting the literal production.
+	ExitLiteral(c *LiteralContext)
 }

@@ -21,67 +21,13 @@ func NewASTBuilder() *ASTBuilder {
 
 // VisitProgram builds the root Program node.
 func (v *ASTBuilder) VisitProgram(ctx *parser.ProgramContext) interface{} {
-	fmt.Println("DEBUG: Visiting Program") // Debug print
 	prog := &Program{PosToken: token.Pos(ctx.GetStart().GetStart())}
-	// The grammar ensures StatementList is present if there are statements
-	if ctx.StatementList() != nil {
-		fmt.Println("DEBUG: Visiting StatementList from VisitProgram") // Debug print
-		// VisitStatementList returns []Statement, which we append to the program's Stmts
-		visitedStmts := ctx.StatementList().Accept(v)                                                       // Get the result first
-		fmt.Printf("DEBUG: VisitStatementList returned type: %T, value: %+v\n", visitedStmts, visitedStmts) // Debug print
-		if stmts, ok := visitedStmts.([]Statement); ok {
-			prog.Stmts = append(prog.Stmts, stmts...)
-			fmt.Printf("DEBUG: Appended %d statements to Program\n", len(stmts)) // Debug print
-		} else {
-			fmt.Printf("WARNING: VisitStatementList did not return []Statement, got %T\n", visitedStmts) // Debug print
-		}
+	for _, stmtCtx := range ctx.AllStatement() {
+
+		stmt := stmtCtx.Accept(v).(Statement)
+		prog.Stmts = append(prog.Stmts, stmt)
 	}
-	fmt.Printf("DEBUG: Finished Visiting Program, returning %+v (Stmts count: %d)\n", prog, len(prog.Stmts)) // Debug print
 	return prog
-}
-
-// VisitStatementList handles one or more statements
-func (v *ASTBuilder) VisitStatementList(ctx *parser.StatementListContext) interface{} {
-	fmt.Println("DEBUG: Visiting StatementList") // Debug print
-	var stmts []Statement
-	// Iterate through all statement contexts and visit them
-	for i, sctx := range ctx.AllStatement() {
-		fmt.Printf("DEBUG: Visiting statement context #%d (type: %T) from VisitStatementList\n", i, sctx) // Debug print
-		// Each statement visit should return a Statement node
-		stmt := sctx.Accept(v)                                                                    // Call Accept on the StatementContext
-		fmt.Printf("DEBUG: Statement context #%d returned type: %T, value: %+v\n", i, stmt, stmt) // Debug print
-		if stmtNode, ok := stmt.(Statement); ok {
-			stmts = append(stmts, stmtNode)
-			fmt.Printf("DEBUG: Appended statement #%d (type: %T) to StatementList\n", i, stmtNode) // Debug print
-		} else {
-			fmt.Printf("  WARNING: Visited statement context type %T did not return a Statement interface, got %T\n", sctx, stmt) // Debug print
-		}
-	}
-	fmt.Printf("DEBUG: Finished Visiting StatementList, returning %d statements\n", len(stmts)) // Debug print
-	return stmts                                                                                // Returns []Statement
-}
-
-// VisitStatement handles a single statement (either simple or compound).
-// This method is crucial for ensuring the result from sub-visits is propagated.
-func (v *ASTBuilder) VisitStatement(ctx *parser.StatementContext) interface{} {
-	fmt.Println("DEBUG: Visiting Statement") // Debug print
-	// A statement context has only one child which is either a simpleStmt or compoundStmt
-	if ctx.SimpleStmt() != nil {
-		fmt.Println("DEBUG: Visiting SimpleStmt from VisitStatement") // Debug print
-		result := ctx.SimpleStmt().Accept(v)
-		fmt.Printf("DEBUG: SimpleStmt.Accept(v) returned type: %T, value: %+v\n", result, result)   // Debug print
-		fmt.Printf("DEBUG: Finished Visiting Statement (SimpleStmt), returning type: %T\n", result) // Debug print
-		return result                                                                               // Return the result from visiting the simple statement
-	}
-	if ctx.CompoundStmt() != nil {
-		fmt.Println("DEBUG: Visiting CompoundStmt from VisitStatement") // Debug print
-		result := ctx.CompoundStmt().Accept(v)
-		fmt.Printf("DEBUG: CompoundStmt.Accept(v) returned type: %T, value: %+v\n", result, result)   // Debug print
-		fmt.Printf("DEBUG: Finished Visiting Statement (CompoundStmt), returning type: %T\n", result) // Debug print
-		return result                                                                                 // Return the result from visiting the compound statement
-	}
-	fmt.Printf("WARNING: Visiting Statement, unexpected context type: %T\n", ctx) // Debug print
-	return nil                                                                    // Should not happen if grammar is correct
 }
 
 // VisitSimpleStmt handles a simple statement (assignment, exprStmt, printStmt, returnStmt).
@@ -216,34 +162,34 @@ func (v *ASTBuilder) VisitReturnStmt(ctx *parser.ReturnStmtContext) interface{} 
 
 // VisitIfStmt builds an IfStmt node.
 func (v *ASTBuilder) VisitIfStmt(ctx *parser.IfStmtContext) interface{} {
-	fmt.Println("DEBUG: Visiting IfStmt") // Debug print
-	// Visit the main condition and the 'then' block
 	cond := ctx.Expression().Accept(v).(Expression)
 	then := ctx.Block().Accept(v).(*BlockStmt)
 
 	var elseIfs []ElseIf
-	// Check for optional elseif clauses
-	if elOpt := ctx.ElseifListOpt().ElseifList(); elOpt != nil {
-		// Iterate through all elseif contexts
+	if elOpt := ctx.ElseifListOpt(); elOpt != nil {
 		for _, eis := range elOpt.AllElseif() {
-			// Visit the elseif condition and block
-			ec := eis.Expression().Accept(v).(Expression)
+			econd := eis.Expression().Accept(v).(Expression)
 			body := eis.Block().Accept(v).(*BlockStmt)
-			// Append a new ElseIf struct to the slice
-			elseIfs = append(elseIfs, ElseIf{Cond: ec, Body: body, PosToken: token.Pos(eis.GetStart().GetStart())})
+			elseIfs = append(elseIfs, ElseIf{
+				Cond:     econd,
+				Body:     body,
+				PosToken: token.Pos(eis.GetStart().GetStart()),
+			})
 		}
 	}
 
 	var elseBlk *BlockStmt
-	// Check for an optional else block
-	if ctx.ElseBlockOpt().Block() != nil {
-		// Visit the else block
-		elseBlk = ctx.ElseBlockOpt().Block().Accept(v).(*BlockStmt)
+	if ebOpt := ctx.ElseBlockOpt(); ebOpt != nil && ebOpt.Block() != nil {
+		elseBlk = ebOpt.Block().Accept(v).(*BlockStmt)
 	}
 
-	ifStmtNode := &IfStmt{Cond: cond, Then: then, ElseIfs: elseIfs, Else: elseBlk, PosToken: token.Pos(ctx.GetStart().GetStart())}
-	fmt.Printf("DEBUG: Finished Visiting IfStmt, returning %+v\n", ifStmtNode) // Debug print
-	return ifStmtNode
+	return &IfStmt{
+		Cond:     cond,
+		Then:     then,
+		ElseIfs:  elseIfs,
+		Else:     elseBlk,
+		PosToken: token.Pos(ctx.GetStart().GetStart()),
+	}
 }
 
 // VisitWhileStmt builds a WhileStmt node.
@@ -291,17 +237,12 @@ func (v *ASTBuilder) VisitFunctionDef(ctx *parser.FunctionDefContext) interface{
 	return funcLiteralNode                                                                               // Return *ast.FunctionLiteral
 }
 
-// VisitBlock builds a BlockStmt node.
 func (v *ASTBuilder) VisitBlock(ctx *parser.BlockContext) interface{} {
-	// fmt.Println("DEBUG: Visiting Block") // Less verbose debug print
 	var stmts []Statement
-	// Check for optional statement list within the block
-	if sl := ctx.StatementListOpt().StatementList(); sl != nil {
-		// Visit the statement list to get the slice of statements
-		visitedStmts := sl.Accept(v) // Get result first
-		// fmt.Printf("DEBUG: Visited StatementListOpt.StatementList, returned type: %T\n", visitedStmts) // Less verbose debug print
-		if visitedStmtsSlice, ok := visitedStmts.([]Statement); ok {
-			stmts = visitedStmtsSlice
+	if sl := ctx.StatementListOpt(); sl != nil {
+		// sl has both Statement() and separators; iterate only the child statements
+		for _, stmtCtx := range sl.AllStatement() {
+			stmts = append(stmts, stmtCtx.Accept(v).(Statement))
 		}
 	}
 	return &BlockStmt{Stmts: stmts, PosToken: token.Pos(ctx.GetStart().GetStart())}
@@ -614,20 +555,19 @@ func (v *ASTBuilder) VisitListLiteral(ctx *parser.ListLiteralContext) interface{
 
 // VisitTableLiteral builds a TableLiteral node.
 func (v *ASTBuilder) VisitTableLiteral(ctx *parser.TableLiteralContext) interface{} {
-	// fmt.Println("DEBUG: Visiting TableLiteral") // Less verbose debug print
 	var fields []Field
-	// Check for optional field list
-	if fl := ctx.FieldListOpt().FieldList(); fl != nil {
-		// Iterate through all field contexts
-		for _, f := range fl.AllField() {
-			// Visit each field to get the key/value pair
-			// VisitField returns a Field struct, not a pointer
-			if fieldStruct, ok := f.Accept(v).(Field); ok { // VisitField should return ast.Field
-				fields = append(fields, fieldStruct) // Append the Field struct
+	if flOpt := ctx.FieldListOpt(); flOpt != nil {
+		for _, fctx := range flOpt.AllField() {
+			if f, ok := fctx.Accept(v).(Field); ok {
+				fields = append(fields, f)
 			}
 		}
 	}
-	return &TableLiteral{Fields: fields, PosToken: token.Pos(ctx.GetStart().GetStart())}
+
+	return &TableLiteral{
+		Fields:   fields,
+		PosToken: token.Pos(ctx.GetStart().GetStart()),
+	}
 }
 
 // VisitField builds a Field struct for table literals.

@@ -27,12 +27,6 @@ func (s *BaseInscriptListener) EnterProgram(ctx *ProgramContext) {}
 // ExitProgram is called when production program is exited.
 func (s *BaseInscriptListener) ExitProgram(ctx *ProgramContext) {}
 
-// EnterStatementList is called when production statementList is entered.
-func (s *BaseInscriptListener) EnterStatementList(ctx *StatementListContext) {}
-
-// ExitStatementList is called when production statementList is exited.
-func (s *BaseInscriptListener) ExitStatementList(ctx *StatementListContext) {}
-
 // EnterStatement is called when production statement is entered.
 func (s *BaseInscriptListener) EnterStatement(ctx *StatementContext) {}
 
@@ -87,12 +81,6 @@ func (s *BaseInscriptListener) EnterElseifListOpt(ctx *ElseifListOptContext) {}
 // ExitElseifListOpt is called when production elseifListOpt is exited.
 func (s *BaseInscriptListener) ExitElseifListOpt(ctx *ElseifListOptContext) {}
 
-// EnterElseifList is called when production elseifList is entered.
-func (s *BaseInscriptListener) EnterElseifList(ctx *ElseifListContext) {}
-
-// ExitElseifList is called when production elseifList is exited.
-func (s *BaseInscriptListener) ExitElseifList(ctx *ElseifListContext) {}
-
 // EnterElseif is called when production elseif is entered.
 func (s *BaseInscriptListener) EnterElseif(ctx *ElseifContext) {}
 
@@ -134,12 +122,6 @@ func (s *BaseInscriptListener) EnterStatementListOpt(ctx *StatementListOptContex
 
 // ExitStatementListOpt is called when production statementListOpt is exited.
 func (s *BaseInscriptListener) ExitStatementListOpt(ctx *StatementListOptContext) {}
-
-// EnterExpressionOpt is called when production expressionOpt is entered.
-func (s *BaseInscriptListener) EnterExpressionOpt(ctx *ExpressionOptContext) {}
-
-// ExitExpressionOpt is called when production expressionOpt is exited.
-func (s *BaseInscriptListener) ExitExpressionOpt(ctx *ExpressionOptContext) {}
 
 // EnterExpression is called when production expression is entered.
 func (s *BaseInscriptListener) EnterExpression(ctx *ExpressionContext) {}
@@ -225,23 +207,29 @@ func (s *BaseInscriptListener) EnterFieldListOpt(ctx *FieldListOptContext) {}
 // ExitFieldListOpt is called when production fieldListOpt is exited.
 func (s *BaseInscriptListener) ExitFieldListOpt(ctx *FieldListOptContext) {}
 
-// EnterFieldList is called when production fieldList is entered.
-func (s *BaseInscriptListener) EnterFieldList(ctx *FieldListContext) {}
-
-// ExitFieldList is called when production fieldList is exited.
-func (s *BaseInscriptListener) ExitFieldList(ctx *FieldListContext) {}
-
 // EnterField is called when production field is entered.
 func (s *BaseInscriptListener) EnterField(ctx *FieldContext) {}
 
 // ExitField is called when production field is exited.
 func (s *BaseInscriptListener) ExitField(ctx *FieldContext) {}
 
-// EnterLiteral is called when production literal is entered.
-func (s *BaseInscriptListener) EnterLiteral(ctx *LiteralContext) {}
+// EnterExpressionOpt is called when production expressionOpt is entered.
+func (s *BaseInscriptListener) EnterExpressionOpt(ctx *ExpressionOptContext) {}
 
-// ExitLiteral is called when production literal is exited.
-func (s *BaseInscriptListener) ExitLiteral(ctx *LiteralContext) {}
+// ExitExpressionOpt is called when production expressionOpt is exited.
+func (s *BaseInscriptListener) ExitExpressionOpt(ctx *ExpressionOptContext) {}
+
+// EnterExpressionListOpt is called when production expressionListOpt is entered.
+func (s *BaseInscriptListener) EnterExpressionListOpt(ctx *ExpressionListOptContext) {}
+
+// ExitExpressionListOpt is called when production expressionListOpt is exited.
+func (s *BaseInscriptListener) ExitExpressionListOpt(ctx *ExpressionListOptContext) {}
+
+// EnterExpressionList is called when production expressionList is entered.
+func (s *BaseInscriptListener) EnterExpressionList(ctx *ExpressionListContext) {}
+
+// ExitExpressionList is called when production expressionList is exited.
+func (s *BaseInscriptListener) ExitExpressionList(ctx *ExpressionListContext) {}
 
 // EnterParamListOpt is called when production paramListOpt is entered.
 func (s *BaseInscriptListener) EnterParamListOpt(ctx *ParamListOptContext) {}
@@ -255,14 +243,8 @@ func (s *BaseInscriptListener) EnterParamList(ctx *ParamListContext) {}
 // ExitParamList is called when production paramList is exited.
 func (s *BaseInscriptListener) ExitParamList(ctx *ParamListContext) {}
 
-// EnterExpressionListOpt is called when production expressionListOpt is entered.
-func (s *BaseInscriptListener) EnterExpressionListOpt(ctx *ExpressionListOptContext) {}
+// EnterLiteral is called when production literal is entered.
+func (s *BaseInscriptListener) EnterLiteral(ctx *LiteralContext) {}
 
-// ExitExpressionListOpt is called when production expressionListOpt is exited.
-func (s *BaseInscriptListener) ExitExpressionListOpt(ctx *ExpressionListOptContext) {}
-
-// EnterExpressionList is called when production expressionList is entered.
-func (s *BaseInscriptListener) EnterExpressionList(ctx *ExpressionListContext) {}
-
-// ExitExpressionList is called when production expressionList is exited.
-func (s *BaseInscriptListener) ExitExpressionList(ctx *ExpressionListContext) {}
+// ExitLiteral is called when production literal is exited.
+func (s *BaseInscriptListener) ExitLiteral(ctx *LiteralContext) {}

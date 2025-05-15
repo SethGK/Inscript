@@ -12,10 +12,6 @@ func (v *BaseInscriptVisitor) VisitProgram(ctx *ProgramContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseInscriptVisitor) VisitStatementList(ctx *StatementListContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseInscriptVisitor) VisitStatement(ctx *StatementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -52,10 +48,6 @@ func (v *BaseInscriptVisitor) VisitElseifListOpt(ctx *ElseifListOptContext) inte
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseInscriptVisitor) VisitElseifList(ctx *ElseifListContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseInscriptVisitor) VisitElseif(ctx *ElseifContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -81,10 +73,6 @@ func (v *BaseInscriptVisitor) VisitBlock(ctx *BlockContext) interface{} {
 }
 
 func (v *BaseInscriptVisitor) VisitStatementListOpt(ctx *StatementListOptContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseInscriptVisitor) VisitExpressionOpt(ctx *ExpressionOptContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -144,15 +132,19 @@ func (v *BaseInscriptVisitor) VisitFieldListOpt(ctx *FieldListOptContext) interf
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseInscriptVisitor) VisitFieldList(ctx *FieldListContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseInscriptVisitor) VisitField(ctx *FieldContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseInscriptVisitor) VisitLiteral(ctx *LiteralContext) interface{} {
+func (v *BaseInscriptVisitor) VisitExpressionOpt(ctx *ExpressionOptContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseInscriptVisitor) VisitExpressionListOpt(ctx *ExpressionListOptContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseInscriptVisitor) VisitExpressionList(ctx *ExpressionListContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -164,10 +156,6 @@ func (v *BaseInscriptVisitor) VisitParamList(ctx *ParamListContext) interface{} 
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseInscriptVisitor) VisitExpressionListOpt(ctx *ExpressionListOptContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseInscriptVisitor) VisitExpressionList(ctx *ExpressionListContext) interface{} {
+func (v *BaseInscriptVisitor) VisitLiteral(ctx *LiteralContext) interface{} {
 	return v.VisitChildren(ctx)
 }

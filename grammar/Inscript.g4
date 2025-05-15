@@ -1,102 +1,252 @@
 grammar Inscript;
 
-// Parser rules
-program             : statementList EOF;
+// -------------------------
+// Parser Rules
+// -------------------------
 
-statementList       : statement+;
-statement           : simpleStmt | compoundStmt;
+program
+    : statement (SEPARATOR statement)* SEPARATOR? EOF
+    ;
 
-simpleStmt          : assignment
-                    | exprStmt
-                    | printStmt
-                    | returnStmt
-                    ;
+statement
+    : simpleStmt
+    | compoundStmt
+    ;
 
-assignment          : primary '=' expression;
-exprStmt            : expression;
-printStmt           : 'print' '(' expressionListOpt ')';
-returnStmt          : 'return' expressionOpt;
+simpleStmt
+    : assignment
+    | exprStmt
+    | printStmt
+    | returnStmt
+    ;
 
-compoundStmt        : ifStmt
-                    | whileStmt
-                    | forStmt
-                    | functionDef
-                    ;
+assignment
+    : primary '=' expression
+    ;
 
-ifStmt              : 'if' expression block elseifListOpt elseBlockOpt;
-elseifListOpt       : /* empty */ | elseifList;
-elseifList          : elseif+;
-elseif              : 'elseif' expression block;
-elseBlockOpt        : /* empty */ | 'else' block;
+exprStmt
+    : expression
+    ;
 
-whileStmt           : 'while' expression block;
-forStmt             : 'for' IDENTIFIER 'in' expression block;
+printStmt
+    : 'print' '(' expressionListOpt ')'
+    ;
 
-// Function definitions
-functionDef         : 'function' '(' paramListOpt ')' block;
+returnStmt
+    : 'return' expressionOpt
+    ;
 
-// Block for statements
-block               : '{' statementListOpt '}';
-statementListOpt    : /* empty */ | statementList;
+compoundStmt
+    : ifStmt
+    | whileStmt
+    | forStmt
+    | functionDef
+    ;
 
-// Optional expression
-expressionOpt       : /* empty */ | expression;
+// If / elseif / else
+ifStmt
+    : 'if' expression block elseifListOpt elseBlockOpt
+    ;
 
-// Expression and parameters
-expression          : logicalOr;
-logicalOr           : logicalAnd ('or' logicalAnd)*;
-logicalAnd          : comparison ('and' comparison)*;
-comparison          : arith (('==' | '!=' | '<' | '>' | '<=' | '>=') arith)*;
-arith               : term (('+' | '-') term)*;
-term                : factor (('*' | '/' | '%') factor)*;
-factor              : unary ('^' unary)*;
-unary               : ('+' | '-' | 'not') unary
-                    | primary;
+elseifListOpt
+    : /* empty */
+    | elseif+
+    ;
 
-primary             : atom ( '[' expression ']' | '(' expressionListOpt ')' )*;
+elseif
+    : 'elseif' expression block
+    ;
 
-atom                : literal
-                    | IDENTIFIER
-                    | listLiteral
-                    | tableLiteral
-                    | '(' expression ')'
-                    | fnLiteral
-                    ;
+elseBlockOpt
+    : /* empty */
+    | 'else' block
+    ;
 
-// Function literal (expression)
-fnLiteral           : 'function' '(' paramListOpt ')' block;
+// Loops
+whileStmt
+    : 'while' expression block
+    ;
 
-// Literals and collections
-listLiteral         : '[' expressionListOpt ']';
-tableLiteral        : '{' fieldListOpt '}';
-fieldListOpt        : /* empty */ | fieldList;
-fieldList           : field (',' field)*;
-field               : IDENTIFIER '=' expression;
+forStmt
+    : 'for' IDENTIFIER 'in' expression block
+    ;
 
-literal             : INTEGER
-                    | FLOAT
-                    | STRING
-                    | BOOLEAN
-                    | 'nil'
-                    ;
+// Function definition (statement)
+functionDef
+    : 'function' '(' paramListOpt ')' block
+    ;
 
-paramListOpt        : /* empty */ | paramList;
-paramList           : IDENTIFIER (',' IDENTIFIER)*;
+// Block of statements, with optional separators
+block
+    : '{' statementListOpt '}'
+    ;
 
-expressionListOpt   : /* empty */ | expressionList;
-expressionList      : expression (',' expression)*;
+statementListOpt
+    : (statement (SEPARATOR statement)*)? SEPARATOR?
+    ;
 
-// Lexer rules
-BOOLEAN             : 'true' | 'false';
-IDENTIFIER          : LETTER (LETTER | DIGIT | '_')*;
-INTEGER             : DIGIT+;
-FLOAT               : DIGIT+ '.' DIGIT+;
-STRING              : '"' (ESC_SEQ | ~["\\])* '"';
+// Expressions
+expression
+    : logicalOr
+    ;
 
-fragment DIGIT      : [0-9];
-fragment LETTER     : [a-zA-Z_];
-fragment ESC_SEQ    : '\\' ["'\\ntbr];
+logicalOr
+    : logicalAnd ('or' logicalAnd)*
+    ;
 
-WS                  : [ \t\r\n]+ -> skip;
-LINE_COMMENT        : '//' ~[\r\n]* -> skip;
-BLOCK_COMMENT       : '/*' .*? '*/' -> skip;
+logicalAnd
+    : comparison ('and' comparison)*
+    ;
+
+comparison
+    : arith (('==' | '!=' | '<' | '>' | '<=' | '>=') arith)*
+    ;
+
+arith
+    : term (('+' | '-') term)*
+    ;
+
+term
+    : factor (('*' | '/' | '%') factor)*
+    ;
+
+factor
+    : unary ('^' unary)*
+    ;
+
+unary
+    : ('+' | '-' | 'not') unary
+    | primary
+    ;
+
+primary
+    : atom (   '[' expression ']'        // index lookup
+             | '(' expressionListOpt ')' // function call
+            )*
+    ;
+
+atom
+    : literal
+    | IDENTIFIER
+    | listLiteral
+    | tableLiteral
+    | '(' expression ')'
+    | fnLiteral
+    ;
+
+fnLiteral
+    : 'function' '(' paramListOpt ')' block
+    ;
+
+listLiteral
+    : '[' expressionListOpt ']'
+    ;
+
+tableLiteral
+    : '{' fieldListOpt '}'
+    ;
+
+fieldListOpt
+    : /* empty */
+    | field (',' field)*
+    ;
+
+field
+    : IDENTIFIER '=' expression
+    ;
+
+// Optional expression or parameter lists
+expressionOpt
+    : /* empty */
+    | expression
+    ;
+
+expressionListOpt
+    : /* empty */
+    | expressionList
+    ;
+
+expressionList
+    : expression (',' expression)*
+    ;
+
+paramListOpt
+    : /* empty */
+    | paramList
+    ;
+
+paramList
+    : IDENTIFIER (',' IDENTIFIER)*
+    ;
+
+// Literals
+literal
+    : INTEGER
+    | FLOAT
+    | STRING
+    | BOOLEAN
+    | 'nil'
+    ;
+
+// -------------------------
+// Lexer Rules
+// -------------------------
+
+// Treat either newline or semicolon as statement terminator
+SEPARATOR
+    : ';'
+    | NEWLINE
+    ;
+
+// Newlines become separators, not just skipped
+NEWLINE
+    : '\r'? '\n'
+    ;
+
+// Whitespace (spaces/tabs) still skipped
+WS
+    : [ \t]+ -> skip
+    ;
+
+// Comments
+LINE_COMMENT
+    : '//' ~[\r\n]* -> skip
+    ;
+
+BLOCK_COMMENT
+    : '/*' .*? '*/' -> skip
+    ;
+
+// Basic tokens
+BOOLEAN
+    : 'true'
+    | 'false'
+    ;
+
+IDENTIFIER
+    : LETTER (LETTER | DIGIT | '_')*
+    ;
+
+INTEGER
+    : DIGIT+
+    ;
+
+FLOAT
+    : DIGIT+ '.' DIGIT+
+    ;
+
+STRING
+    : '"' (ESC_SEQ | ~["\\])* '"'
+    ;
+
+fragment DIGIT
+    : [0-9]
+    ;
+
+fragment LETTER
+    : [a-zA-Z_]
+    ;
+
+fragment ESC_SEQ
+    : '\\' ["'\\ntbr]
+    ;
