@@ -196,9 +196,6 @@ func (s *SymbolTable) DebugStore() {
 	}
 }
 
-// Example of adding DefineLocal/DefineParameter if they aren't just Define wrappers
-// These would typically call s.Define internally with the correct kind.
-/*
 func (s *SymbolTable) DefineLocal(name string) *Symbol {
 	return s.Define(name, Local)
 }
@@ -206,4 +203,3 @@ func (s *SymbolTable) DefineLocal(name string) *Symbol {
 func (s *SymbolTable) DefineParameter(name string) *Symbol {
 	return s.Define(name, Parameter)
 }
-*/

@@ -149,25 +149,13 @@ func (c *Compiler) LeaveScope() {
 
 // DefineGlobal defines a symbol in the top-level global symbol table.
 // Returns the created Symbol.
-// This now increments the global symbol table's definition count.
-func (c *Compiler) DefineGlobal(name string, kind SymbolKind) *Symbol { // Referring to SymbolKind, Symbol from symboltable.go
-	// Check if it already exists in the global table
-	// *** FIX START: Access store as a lowercase field ***
-	if symbol, ok := c.globals.store[name]; ok {
-		// *** FIX END ***
-		// If it exists, return the existing symbol.
-		// This handles cases where a global is used before being assigned.
-		return symbol
+func (c *Compiler) DefineGlobal(name string) *Symbol {
+	// If it already exists, just return it.
+	if sym, ok := c.globals.store[name]; ok {
+		return sym
 	}
-
-	// Define a new global symbol
-	// The index is the current number of definitions in the global table.
-	// *** FIX START: Call NumDefinitions() method and remove increment ***
-	symbol := &Symbol{Name: name, Kind: kind, Index: c.globals.NumDefinitions()} // Use the method
-	c.globals.store[name] = symbol                                               // Access store as a lowercase field
-	c.globals.numDefinitions++                                                   // Manually increment the lowercase field
-	// *** FIX END ***
-	return symbol
+	// Otherwise define a new GLOBAL
+	return c.globals.Define(name, Global)
 }
 
 // DefineLocal defines a symbol in the current scope's symbol table.
@@ -264,34 +252,44 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		c.emit(OpPop)
 
 	case *ast.AssignStmt:
-		// Only handling identifier targets here.
+		// Only identifier targets supported
 		ident, ok := stmt.Target.(*ast.Identifier)
 		if !ok {
 			return fmt.Errorf("unsupported assignment target: %T", stmt.Target)
 		}
 
-		// Compile the RHS value.
-		fmt.Printf("DEBUG (Compiler): Compiling AssignStmt value for target '%s' (type %T\n", ident.Name, stmt.Value)
-		fmt.Printf("DEBUG (Compiler): Before compileExpression for AssignStmt value. Instructions length: %d\n", len(c.instructions))
+		// Compile the RHS
+		fmt.Printf(
+			"DEBUG (Compiler): Compiling AssignStmt value for target '%s' (type %T\n",
+			ident.Name, stmt.Value,
+		)
+		fmt.Printf(
+			"DEBUG (Compiler): Before compileExpression for AssignStmt value. Instructions length: %d\n",
+			len(c.instructions),
+		)
 		if err := c.compileExpression(stmt.Value); err != nil {
 			return err
 		}
-		fmt.Printf("DEBUG (Compiler): After compileExpression for AssignStmt value. Instructions length: %d\n", len(c.instructions))
+		fmt.Printf(
+			"DEBUG (Compiler): After compileExpression for AssignStmt value. Instructions length: %d\n",
+			len(c.instructions),
+		)
 
-		// Define or resolve the symbol.
+		// Resolve or define the symbol
 		var sym *Symbol
 		if c.currentScope.isFunctionScope {
-			// In a function: locals
+			// Inside a function: parameters and locals
 			sym, _ = c.currentScope.Resolve(ident.Name)
 			if sym == nil {
-				sym = c.currentScope.Define(ident.Name, Local)
+				// Wasn't a parameter or existing local → define a new local
+				sym = c.currentScope.DefineLocal(ident.Name)
 			}
 			c.emit(OpSetLocal, sym.Index)
 		} else {
-			// Top‐level or block in main: globals
+			// Top‑level or main‑program block: globals
 			sym, _ = c.globals.Resolve(ident.Name)
 			if sym == nil {
-				sym = c.globals.Define(ident.Name, Global)
+				sym = c.DefineGlobal(ident.Name)
 			}
 			c.emit(OpSetGlobal, sym.Index)
 		}
@@ -577,7 +575,7 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		for _, param := range expr.Params { // Assuming Params field exists in ast.FunctionLiteral
 			// Define parameter as a Local in the function's scope.
 			// *** FIX START: Pass 'param' directly as it's a string ***
-			funcCompiler.DefineLocal(param) // Assuming param is string, DefineLocal correctly increments numDefinitions
+			funcCompiler.currentScope.DefineParameter(param) // Assuming param is string, DefineLocal correctly increments numDefinitions
 			// *** FIX END ***
 		}
 
