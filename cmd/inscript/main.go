@@ -30,12 +30,12 @@ func main() {
 	lexer := parser.NewInscriptLexer(input)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 	p := parser.NewInscriptParser(stream)
-	p.AddParseListener(NewTraceListener())
+	// p.AddParseListener(NewTraceListener())
 
 	// Enable tracing and diagnostics
-	errorListener := antlr.NewDiagnosticErrorListener(true)
-	p.AddErrorListener(errorListener)
-	lexer.AddErrorListener(errorListener)
+	// errorListener := antlr.NewDiagnosticErrorListener(true)
+	// p.AddErrorListener(errorListener)
+	// lexer.AddErrorListener(errorListener)
 
 	// Use the default error strategy (optional, for clearer output during debugging)
 	p.SetErrorHandler(antlr.NewDefaultErrorStrategy())

@@ -30,6 +30,18 @@ func (v *ASTBuilder) VisitProgram(ctx *parser.ProgramContext) interface{} {
 	return prog
 }
 
+// VisitStatement dispatches a StatementContext to either your SimpleStmt or CompoundStmt visitor
+func (v *ASTBuilder) VisitStatement(ctx *parser.StatementContext) interface{} {
+	if ctx.SimpleStmt() != nil {
+		return ctx.SimpleStmt().Accept(v)
+	}
+	if ctx.CompoundStmt() != nil {
+		return ctx.CompoundStmt().Accept(v)
+	}
+	// Should never happen if grammar is correct
+	panic(fmt.Sprintf("unexpected statement node: %s", ctx.GetText()))
+}
+
 // VisitSimpleStmt handles a simple statement (assignment, exprStmt, printStmt, returnStmt).
 // This method is crucial for ensuring the result from sub-visits is propagated.
 func (v *ASTBuilder) VisitSimpleStmt(ctx *parser.SimpleStmtContext) interface{} {
@@ -72,6 +84,13 @@ func (v *ASTBuilder) VisitSimpleStmt(ctx *parser.SimpleStmtContext) interface{} 
 func (v *ASTBuilder) VisitCompoundStmt(ctx *parser.CompoundStmtContext) interface{} {
 	fmt.Println("DEBUG: Visiting CompoundStmt") // Debug print
 	// A compoundStmt context has only one child which is one of the compound statement types
+	// --- Handle standalone `function(...) { ... }` as its own statement ---
+	if fd := ctx.FunctionDef(); fd != nil {
+		// Build the literal
+		fnExpr := fd.Accept(v).(Expression)
+		// Wrap it as an expression‐statement
+		return &ExprStmt{Expr: fnExpr, PosToken: token.Pos(fd.GetStart().GetStart())}
+	}
 	if ctx.IfStmt() != nil {
 		fmt.Println("DEBUG: Visiting IfStmt from VisitCompoundStmt") // Debug print
 		result := ctx.IfStmt().Accept(v)
@@ -237,15 +256,26 @@ func (v *ASTBuilder) VisitFunctionDef(ctx *parser.FunctionDefContext) interface{
 	return funcLiteralNode                                                                               // Return *ast.FunctionLiteral
 }
 
+// VisitBlock builds a BlockStmt node.
 func (v *ASTBuilder) VisitBlock(ctx *parser.BlockContext) interface{} {
-	var stmts []Statement
-	if sl := ctx.StatementListOpt(); sl != nil {
-		// sl has both Statement() and separators; iterate only the child statements
-		for _, stmtCtx := range sl.AllStatement() {
-			stmts = append(stmts, stmtCtx.Accept(v).(Statement))
+	block := &BlockStmt{PosToken: token.Pos(ctx.GetStart().GetStart())}
+	for i, stmtCtx := range ctx.AllStatement() {
+		stmt := stmtCtx.Accept(v).(Statement)
+		block.Stmts = append(block.Stmts, stmt)
+
+		// If the statement is a return, stop processing further
+		// Emit warning if unreachable code is detected
+		if _, isReturn := stmt.(*ReturnStmt); isReturn {
+			// Check if there are more statements after this one
+			remaining := ctx.AllStatement()[i+1:]
+			if len(remaining) > 0 {
+				fmt.Printf("WARNING: Unreachable code after return at line %d\n",
+					stmtCtx.GetStart().GetLine())
+			}
+			break
 		}
 	}
-	return &BlockStmt{Stmts: stmts, PosToken: token.Pos(ctx.GetStart().GetStart())}
+	return block
 }
 
 // VisitExpressionList handles a comma-separated list of expressions.

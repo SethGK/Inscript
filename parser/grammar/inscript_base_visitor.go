@@ -72,10 +72,6 @@ func (v *BaseInscriptVisitor) VisitBlock(ctx *BlockContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseInscriptVisitor) VisitStatementListOpt(ctx *StatementListOptContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseInscriptVisitor) VisitExpression(ctx *ExpressionContext) interface{} {
 	return v.VisitChildren(ctx)
 }

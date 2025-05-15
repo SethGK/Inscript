@@ -118,7 +118,7 @@ func (s *SymbolTable) Resolve(name string) (*Symbol, bool) {
 
 	// If found in global or builtin in an outer scope, just return that symbol.
 	// These are not captured as free variables.
-	if sym.Kind == Global || sym.Kind == Builtin {
+	if sym.Kind == Global || sym.Kind == Builtin || sym.Kind == Parameter {
 		// --- Debug Print: Found Global/Builtin in outer scope ---
 		fmt.Printf("DEBUG (SymbolTable): Found '%s' as %s in outer scope. Not capturing.\n", name, sym.Kind)
 		// --- End Debug Print ---
@@ -147,9 +147,6 @@ func (s *SymbolTable) Resolve(name string) (*Symbol, bool) {
 
 	// Debug print from the original code, kept for continuity
 	fmt.Printf("→ Captured free var '%s' as slot %d in scope %p\n", freeSym.Name, freeSym.Index, s)
-
-	// *** REMOVE THIS INCORRECT LINE: ***
-	// s.store[name] = freeSym // <-- This line was the bug! Removed.
 
 	// Return the newly created Free symbol for the current scope.
 	return freeSym, true

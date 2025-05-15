@@ -148,40 +148,19 @@ func (c *Compiler) LeaveScope() {
 }
 
 // DefineGlobal defines a symbol in the top-level global symbol table.
+// DefineGlobal defines a symbol in the top‑level global symbol table.
 // Returns the created Symbol.
 func (c *Compiler) DefineGlobal(name string) *Symbol {
-	// If it already exists, just return it.
-	if sym, ok := c.globals.store[name]; ok {
-		return sym
-	}
-	// Otherwise define a new GLOBAL
+	// Just delegate to the symbol table’s Define (which takes care of
+	// indexing and numDefinitions for you).
 	return c.globals.Define(name, Global)
 }
 
-// DefineLocal defines a symbol in the current scope's symbol table.
+// DefineLocal defines a symbol in the current scope’s symbol table.
 // Returns the created Symbol.
-func (c *Compiler) DefineLocal(name string) *Symbol { // Referring to Symbol from symboltable.go
-	// Check if the symbol is already defined in the current scope.
-	// This prevents re-declaring variables in the same scope (if language rules require this).
-	// For now, we allow shadowing outer scopes but not re-declaration in the same scope.
-	// *** FIX START: Access store as a lowercase field ***
-	_, ok := c.currentScope.store[name]
-	// *** FIX END ***
-	if ok {
-		// Variable already defined in the current scope.
-		// Depending on language semantics, you might want to return an error here.
-		// For now, let's allow it, and the new definition will shadow the old one in this scope.
-		// A stricter language would return fmt.Errorf("variable '%s' already defined in this scope", name)
-	}
-
-	// Define a new local symbol in the current scope.
-	// The index is the current number of definitions in this scope.
-	// *** FIX START: Call NumDefinitions() method and remove increment ***
-	symbol := &Symbol{Name: name, Kind: Local, Index: c.currentScope.NumDefinitions()} // Use the method
-	c.currentScope.store[name] = symbol                                                // Access store as a lowercase field
-	c.currentScope.numDefinitions++                                                    // Manually increment the lowercase field
-	// *** FIX END ***
-	return symbol
+func (c *Compiler) DefineLocal(name string) *Symbol {
+	// Delegate to the symbol table’s DefineLocal convenience wrapper.
+	return c.currentScope.DefineLocal(name)
 }
 
 // Compile compiles the AST program into bytecode.
@@ -367,27 +346,19 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		c.emit(OpNull)
 
 	case *ast.Identifier:
-		symbol, ok := c.currentScope.Resolve(expr.Name) // Assuming Resolve method exists
+		symbol, ok := c.currentScope.Resolve(expr.Name)
 		if !ok {
 			return fmt.Errorf("undefined variable '%s'", expr.Name)
 		}
-		switch symbol.Kind { // Assuming Kind field exists on Symbol
+		switch symbol.Kind {
 		case Global:
-			c.emit(OpGetGlobal, symbol.Index) // Assuming Index field exists on Symbol
-		case Local, Parameter: // Assuming Local and Parameter kinds exist
-			// *** FIX START: Access isFunctionScope as a lowercase field ***
-			if !c.currentScope.isFunctionScope {
-				// *** FIX END ***
-				return fmt.Errorf("getting local '%s' outside function scope", symbol.Name)
-			}
-			c.emit(OpGetLocal, symbol.Index) // Assuming Index field exists on Symbol
-		case Builtin: // Assuming Builtin kind exists
-			c.emit(OpGetGlobal, symbol.Index) // Builtins are stored in globals
-		// *** FIX START: Add case for Free symbol kind ***
-		case Free: // Referring to Free from symboltable.go
-			// Get a free variable. Operand is the index in the function's freeSymbols slice.
-			c.emit(OpGetFree, symbol.Index) // Use OpGetFree from code.go
-		// *** FIX END ***
+			c.emit(OpGetGlobal, symbol.Index)
+		case Local, Parameter:
+			c.emit(OpGetLocal, symbol.Index) // <-- Emit OpGetLocal directly
+		case Builtin:
+			c.emit(OpGetGlobal, symbol.Index)
+		case Free:
+			c.emit(OpGetFree, symbol.Index)
 		default:
 			return fmt.Errorf("unsupported symbol kind for get: %v", symbol.Kind)
 		}

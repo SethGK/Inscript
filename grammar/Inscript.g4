@@ -5,7 +5,7 @@ grammar Inscript;
 // -------------------------
 
 program
-    : statement (SEPARATOR statement)* SEPARATOR? EOF
+    : (statement SEPARATOR)+ EOF
     ;
 
 statement
@@ -76,16 +76,15 @@ functionDef
     : 'function' '(' paramListOpt ')' block
     ;
 
-// Block of statements, with optional separators
+// Block of statements: require every statement to be followed by a separator
 block
-    : '{' statementListOpt '}'
+    : '{' SEPARATOR* (statement SEPARATOR)* '}'
     ;
 
-statementListOpt
-    : (statement (SEPARATOR statement)*)? SEPARATOR?
-    ;
+// -------------------------
+// Expression Rules
+// -------------------------
 
-// Expressions
 expression
     : logicalOr
     ;

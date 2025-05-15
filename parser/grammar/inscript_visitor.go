@@ -56,9 +56,6 @@ type InscriptVisitor interface {
 	// Visit a parse tree produced by InscriptParser#block.
 	VisitBlock(ctx *BlockContext) interface{}
 
-	// Visit a parse tree produced by InscriptParser#statementListOpt.
-	VisitStatementListOpt(ctx *StatementListOptContext) interface{}
-
 	// Visit a parse tree produced by InscriptParser#expression.
 	VisitExpression(ctx *ExpressionContext) interface{}
 

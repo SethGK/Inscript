@@ -56,9 +56,6 @@ type InscriptListener interface {
 	// EnterBlock is called when entering the block production.
 	EnterBlock(c *BlockContext)
 
-	// EnterStatementListOpt is called when entering the statementListOpt production.
-	EnterStatementListOpt(c *StatementListOptContext)
-
 	// EnterExpression is called when entering the expression production.
 	EnterExpression(c *ExpressionContext)
 
@@ -169,9 +166,6 @@ type InscriptListener interface {
 
 	// ExitBlock is called when exiting the block production.
 	ExitBlock(c *BlockContext)
-
-	// ExitStatementListOpt is called when exiting the statementListOpt production.
-	ExitStatementListOpt(c *StatementListOptContext)
 
 	// ExitExpression is called when exiting the expression production.
 	ExitExpression(c *ExpressionContext)

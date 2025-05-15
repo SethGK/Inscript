@@ -117,12 +117,6 @@ func (s *BaseInscriptListener) EnterBlock(ctx *BlockContext) {}
 // ExitBlock is called when production block is exited.
 func (s *BaseInscriptListener) ExitBlock(ctx *BlockContext) {}
 
-// EnterStatementListOpt is called when production statementListOpt is entered.
-func (s *BaseInscriptListener) EnterStatementListOpt(ctx *StatementListOptContext) {}
-
-// ExitStatementListOpt is called when production statementListOpt is exited.
-func (s *BaseInscriptListener) ExitStatementListOpt(ctx *StatementListOptContext) {}
-
 // EnterExpression is called when production expression is entered.
 func (s *BaseInscriptListener) EnterExpression(ctx *ExpressionContext) {}
 
