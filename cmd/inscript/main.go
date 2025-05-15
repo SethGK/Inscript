@@ -30,18 +30,17 @@ func main() {
 	lexer := parser.NewInscriptLexer(input)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 	p := parser.NewInscriptParser(stream)
+	p.AddParseListener(NewTraceListener())
 
-	// Add an error listener to capture syntax errors
-	// The DiagnosticErrorListener will print errors to stderr automatically.
-	// You might want to implement a custom error listener for more control.
+	// Enable tracing and diagnostics
 	errorListener := antlr.NewDiagnosticErrorListener(true)
 	p.AddErrorListener(errorListener)
-	lexer.AddErrorListener(errorListener) // Also add to the lexer
+	lexer.AddErrorListener(errorListener)
 
-	p.SetErrorHandler(antlr.NewDefaultErrorStrategy()) // Use default error recovery
+	// Use the default error strategy (optional, for clearer output during debugging)
+	p.SetErrorHandler(antlr.NewDefaultErrorStrategy())
 
-	// Parse the program rule
-	// The error listener will report errors during this call.
+	// Parse the top-level rule
 	parseTree := p.Program()
 
 	// We don't have a direct way to get the *count* of errors from the default listener.
