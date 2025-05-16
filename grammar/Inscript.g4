@@ -1,251 +1,193 @@
+// Inscript.g4
+
 grammar Inscript;
 
-// -------------------------
 // Parser Rules
-// -------------------------
 
-program
-    : (statement SEPARATOR)+ EOF
-    ;
+program: (statement? NEWLINE*)* EOF;
 
 statement
-    : simpleStmt
-    | compoundStmt
-    ;
-
-simpleStmt
-    : assignment
-    | exprStmt
-    | printStmt
-    | returnStmt
-    ;
-
-assignment
-    : primary '=' expression
-    ;
-
-exprStmt
-    : expression
-    ;
-
-printStmt
-    : 'print' '(' expressionListOpt ')'
-    ;
-
-returnStmt
-    : 'return' expressionOpt
-    ;
-
-compoundStmt
-    : ifStmt
+    : exprStmt
+    | assignment
+    | ifStmt
     | whileStmt
     | forStmt
-    | functionDef
+    | funcDef
+    | breakStmt
+    | continueStmt
+    | returnStmt
+    | importStmt
+    | printStmt
+    | block
     ;
 
-// If / elseif / else
+block: LBRACE (statement? NEWLINE*)* RBRACE;
+
+exprStmt: expression;
+
+assignment
+    : target ASSIGN expression
+    ;
+
+target
+    : IDENTIFIER
+    | indexExpr
+    | attrExpr
+    ;
+
 ifStmt
-    : 'if' expression block elseifListOpt elseBlockOpt
+    : IF expression block (ELSE block)?
     ;
 
-elseifListOpt
-    : /* empty */
-    | elseif+
-    ;
-
-elseif
-    : 'elseif' expression block
-    ;
-
-elseBlockOpt
-    : /* empty */
-    | 'else' block
-    ;
-
-// Loops
-whileStmt
-    : 'while' expression block
-    ;
+whileStmt: WHILE expression block;
 
 forStmt
-    : 'for' IDENTIFIER 'in' expression block
+    : FOR IDENTIFIER IN expression block
     ;
 
-// Function definition (statement)
-functionDef
-    : 'function' '(' paramListOpt ')' block
-    ;
-
-// Block of statements: require every statement to be followed by a separator
-block
-    : '{' SEPARATOR* (statement SEPARATOR)* '}'
-    ;
-
-// -------------------------
-// Expression Rules
-// -------------------------
-
-expression
-    : logicalOr
-    ;
-
-logicalOr
-    : logicalAnd ('or' logicalAnd)*
-    ;
-
-logicalAnd
-    : comparison ('and' comparison)*
-    ;
-
-comparison
-    : arith (('==' | '!=' | '<' | '>' | '<=' | '>=') arith)*
-    ;
-
-arith
-    : term (('+' | '-') term)*
-    ;
-
-term
-    : factor (('*' | '/' | '%') factor)*
-    ;
-
-factor
-    : unary ('^' unary)*
-    ;
-
-unary
-    : ('+' | '-' | 'not') unary
-    | primary
-    ;
-
-primary
-    : atom (   '[' expression ']'        // index lookup
-             | '(' expressionListOpt ')' // function call
-            )*
-    ;
-
-atom
-    : literal
-    | IDENTIFIER
-    | listLiteral
-    | tableLiteral
-    | '(' expression ')'
-    | fnLiteral
-    ;
-
-fnLiteral
-    : 'function' '(' paramListOpt ')' block
-    ;
-
-listLiteral
-    : '[' expressionListOpt ']'
-    ;
-
-tableLiteral
-    : '{' fieldListOpt '}'
-    ;
-
-fieldListOpt
-    : /* empty */
-    | field (',' field)*
-    ;
-
-field
-    : IDENTIFIER '=' expression
-    ;
-
-// Optional expression or parameter lists
-expressionOpt
-    : /* empty */
-    | expression
-    ;
-
-expressionListOpt
-    : /* empty */
-    | expressionList
-    ;
-
-expressionList
-    : expression (',' expression)*
-    ;
-
-paramListOpt
-    : /* empty */
-    | paramList
+funcDef
+    : FUNCTION IDENTIFIER LPAREN paramList? RPAREN (ARROW typeAnnotation)? block
     ;
 
 paramList
-    : IDENTIFIER (',' IDENTIFIER)*
+    : param (COMMA param)* (COMMA)?
     ;
 
-// Literals
+param
+    : IDENTIFIER (ASSIGN expression)? (COLON typeAnnotation)?
+    | ELLIPSIS IDENTIFIER
+    ;
+
+typeAnnotation: IDENTIFIER;
+
+breakStmt: BREAK;
+continueStmt: CONTINUE;
+returnStmt: RETURN expression?;
+importStmt: IMPORT STRING;
+printStmt: PRINT LPAREN (expression (COMMA expression)*)? RPAREN;
+
+expression
+    : expression POW expression         #expExpr
+    | expression MUL expression         #mulExpr
+    | expression DIV expression         #divExpr
+    | expression IDIV expression        #idivExpr
+    | expression MOD expression         #modExpr
+    | expression ADD expression         #addExpr
+    | expression SUB expression         #subExpr
+    | expression BITAND expression      #bitandExpr
+    | expression BITOR expression       #bitorExpr
+    | expression BITXOR expression      #bitxorExpr
+    | expression SHL expression         #shlExpr
+    | expression SHR expression         #shrExpr
+    | expression LT expression          #ltExpr
+    | expression LE expression          #leExpr
+    | expression GT expression          #gtExpr
+    | expression GE expression          #geExpr
+    | expression EQ expression          #eqExpr
+    | expression NEQ expression         #neqExpr
+    | expression AND expression         #andExpr
+    | expression OR expression          #orExpr
+    | NOT expression                    #notExpr
+    | BITNOT expression                 #bitnotExpr
+    | SUB expression                    #negExpr
+    | primary                           #primaryExpr
+    ;
+
+primary
+    : literal
+    | IDENTIFIER
+    | LPAREN expression RPAREN
+    | LPAREN expression (COMMA expression)+ RPAREN // tuple
+    | listLiteral
+    | tableLiteral
+    | callExpr
+    | indexExpr
+    | attrExpr
+    ;
+
+callExpr: expression LPAREN (expression (COMMA expression)*)? RPAREN;
+indexExpr: expression LBRACK expression RBRACK;
+attrExpr: expression DOT IDENTIFIER;
+
 literal
-    : INTEGER
-    | FLOAT
+    : NUMBER
     | STRING
-    | BOOLEAN
-    | 'nil'
+    | TRUE
+    | FALSE
+    | NIL
     ;
 
-// -------------------------
+listLiteral: LBRACK (expression (COMMA expression)*)? RBRACK;
+tableLiteral: LBRACE (tableEntry (COMMA tableEntry)*)? RBRACE;
+tableEntry: (expression | STRING | NUMBER) ASSIGN expression;
+
 // Lexer Rules
-// -------------------------
 
-// Treat either newline or semicolon as statement terminator
-SEPARATOR
-    : ';'
-    | NEWLINE
-    ;
+FUNCTION: 'function';
+IF: 'if';
+ELSE: 'else';
+WHILE: 'while';
+FOR: 'for';
+IN: 'in';
+BREAK: 'break';
+CONTINUE: 'continue';
+RETURN: 'return';
+IMPORT: 'import';
+PRINT: 'print';
+TRUE: 'true';
+FALSE: 'false';
+NIL: 'nil';
+AND: 'and';
+OR: 'or';
+NOT: 'not';
+POW: '\^\^';
+ADD: '+';
+SUB: '-';
+MUL: '*';
+DIV: '/';
+IDIV: '//' ;
+MOD: '%';
+BITAND: '&';
+BITOR: '\|';
+BITXOR: '\^';
+BITNOT: '~';
+SHL: '<<';
+SHR: '>>';
 
-// Newlines become separators, not just skipped
-NEWLINE
-    : '\r'? '\n'
-    ;
+EQ: '==';
+NEQ: '!=';
+LT: '<';
+LE: '<=';
+GT: '>';
+GE: '>=';
+ASSIGN: '=';
+ARROW: '->';
 
-// Whitespace (spaces/tabs) still skipped
-WS
-    : [ \t]+ -> skip
-    ;
+LPAREN: '(';
+RPAREN: ')';
+LBRACK: '[';
+RBRACK: ']';
+LBRACE: '{';
+RBRACE: '}';
+COMMA: ',';
+DOT: '.';
+COLON: ':';
+ELLIPSIS: '...';
 
-// Comments
-LINE_COMMENT
-    : '//' ~[\r\n]* -> skip
-    ;
-
-BLOCK_COMMENT
-    : '/*' .*? '*/' -> skip
-    ;
-
-// Basic tokens
-BOOLEAN
-    : 'true'
-    | 'false'
-    ;
-
-IDENTIFIER
-    : LETTER (LETTER | DIGIT | '_')*
-    ;
-
-INTEGER
-    : DIGIT+
-    ;
-
-FLOAT
-    : DIGIT+ '.' DIGIT+
-    ;
-
+IDENTIFIER: [a-zA-Z_][a-zA-Z0-9_]*;
+NUMBER: [0-9]+ ('.' [0-9]+)?;
 STRING
-    : '"' (ESC_SEQ | ~["\\])* '"'
+    : '"' (ESC_SEQ | ~["\\\n\r])* '"'
+    | '\'' (ESC_SEQ | ~['\\\n\r])* '\''
+    | '"""' .*? '"""'
+    | "'''" .*? "'''"
     ;
 
-fragment DIGIT
-    : [0-9]
-    ;
+fragment ESC_SEQ: '\\' [btnr"'\\];
 
-fragment LETTER
-    : [a-zA-Z_]
-    ;
+COMMENT: '#' ~[\n\r]* -> skip;
+MULTILINE_COMMENT: '#' .*? '#' -> skip;
+BLOCK_COMMENT: '/\*' .*? '\*/' -> skip;
 
-fragment ESC_SEQ
-    : '\\' ["'\\ntbr]
-    ;
+NEWLINE: [\r\n]+;
+WS: [ \t]+ -> skip;
