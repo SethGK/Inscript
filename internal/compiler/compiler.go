@@ -231,47 +231,61 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		c.emit(OpPop)
 
 	case *ast.AssignStmt:
-		// Only identifier targets supported
 		ident, ok := stmt.Target.(*ast.Identifier)
 		if !ok {
 			return fmt.Errorf("unsupported assignment target: %T", stmt.Target)
 		}
 
-		// Compile the RHS
+		// 1. Compile the Right Hand Side (RHS) expression FIRST.
+		// The result (the value to be assigned) will be left on the stack.
 		fmt.Printf(
-			"DEBUG (Compiler): Compiling AssignStmt value for target '%s' (type %T\n",
+			"DEBUG (Compiler): Compiling AssignStmt value for target '%s' (type %T). Compiling RHS expression...\n",
 			ident.Name, stmt.Value,
-		)
-		fmt.Printf(
-			"DEBUG (Compiler): Before compileExpression for AssignStmt value. Instructions length: %d\n",
-			len(c.instructions),
 		)
 		if err := c.compileExpression(stmt.Value); err != nil {
 			return err
 		}
-		fmt.Printf(
-			"DEBUG (Compiler): After compileExpression for AssignStmt value. Instructions length: %d\n",
-			len(c.instructions),
-		)
+		fmt.Printf("DEBUG (Compiler): Finished compiling RHS. Stack top should be value for '%s'\n", ident.Name)
 
-		// Resolve or define the symbol
-		var sym *Symbol
-		if c.currentScope.isFunctionScope {
-			// Inside a function: parameters and locals
-			sym, _ = c.currentScope.Resolve(ident.Name)
-			if sym == nil {
-				// Wasn't a parameter or existing local → define a new local
-				sym = c.currentScope.DefineLocal(ident.Name)
+		// 2. Resolve the target identifier to find out where it lives (or should live).
+		symbol, found := c.currentScope.Resolve(ident.Name) // Start resolution from the current scope
+
+		if found {
+			// Variable already exists - emit appropriate SET opcode based on KIND
+			switch symbol.Kind {
+			case Global:
+				c.emit(OpSetGlobal, symbol.Index) // Assuming OpSetGlobal exists
+			case Local, Parameter:
+				// If found as Local or Parameter, we must be within the function's compilation unit.
+				c.emit(OpSetLocal, symbol.Index) // Assuming OpSetLocal exists
+			case Free:
+				// Need an OpSetFree opcode if assignment to free vars is allowed.
+				// For now, disallow it or implement OpSetFree.
+				return fmt.Errorf("cannot assign to captured free variable '%s'", symbol.Name)
+			case Builtin:
+				return fmt.Errorf("cannot assign to builtin '%s'", symbol.Name)
+			default:
+				return fmt.Errorf("unsupported symbol kind for assignment: %v", symbol.Kind)
 			}
-			c.emit(OpSetLocal, sym.Index)
 		} else {
-			// Top‑level or main‑program block: globals
-			sym, _ = c.globals.Resolve(ident.Name)
-			if sym == nil {
-				sym = c.DefineGlobal(ident.Name)
+			// 3. New variable definition - decide if it's Local or Global.
+			// Check if this compiler instance is the main program compiler or a function compiler.
+			// If the current scope is the global scope, this is the main compiler.
+			// Otherwise, it's a function compiler (or a block within one).
+			if c.currentScope == c.globals { // Check if we are compiling in the global scope
+				// Define as Global
+				fmt.Printf("DEBUG (Compiler): Defining new variable '%s' as GLOBAL\n", ident.Name)
+				sym := c.DefineGlobal(ident.Name) // Define in the global table
+				c.emit(OpSetGlobal, sym.Index)    // Emit SetGlobal
+			} else { // We are inside a function compilation unit (either function scope or block scope)
+				// Define as Local in the current scope (which will be in the function's symbol table chain)
+				fmt.Printf("DEBUG (Compiler): Defining new variable '%s' as LOCAL\n", ident.Name)
+				sym := c.currentScope.DefineLocal(ident.Name) // Define in the current scope (should be in func's table)
+				c.emit(OpSetLocal, sym.Index)                 // Emit SetLocal
 			}
-			c.emit(OpSetGlobal, sym.Index)
 		}
+
+		return nil
 
 	case *ast.PrintStmt:
 		for _, e := range stmt.Exprs {
@@ -322,20 +336,23 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 // compileExpression emits bytecode for an expression node.
 func (c *Compiler) compileExpression(e ast.Expression) error {
 	// --- Debug Print: Compiling Expression type %T ---
-	fmt.Printf("DEBUG (Compiler): Compiling Expression type %T\n", e)
-	// --- End Debug Print ---
+	fmt.Printf("DEBUG (Compiler): compileExpression start for type %T\n", e) // ADDED DEBUG
 
 	switch expr := e.(type) {
 	case *ast.IntegerLiteral:
-		c.emitConstant(types.NewInteger(expr.Value)) // Assuming types.NewInteger exists
+		fmt.Println("DEBUG (Compiler): Compiling IntegerLiteral") // ADDED DEBUG
+		c.emitConstant(types.NewInteger(expr.Value))
 
 	case *ast.FloatLiteral:
-		c.emitConstant(types.NewFloat(expr.Value)) // Assuming types.NewFloat exists
+		fmt.Println("DEBUG (Compiler): Compiling FloatLiteral") // ADDED DEBUG
+		c.emitConstant(types.NewFloat(expr.Value))
 
 	case *ast.StringLiteral:
-		c.emitConstant(types.NewString(expr.Value)) // Assuming types.NewString exists
+		fmt.Println("DEBUG (Compiler): Compiling StringLiteral") // ADDED DEBUG
+		c.emitConstant(types.NewString(expr.Value))
 
 	case *ast.BooleanLiteral:
+		fmt.Printf("DEBUG (Compiler): Compiling BooleanLiteral: %t\n", expr.Value) // ADDED DEBUG
 		if expr.Value {
 			c.emit(OpTrue)
 		} else {
@@ -343,115 +360,156 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		}
 
 	case *ast.NilLiteral:
+		fmt.Println("DEBUG (Compiler): Compiling NilLiteral") // ADDED DEBUG
 		c.emit(OpNull)
 
 	case *ast.Identifier:
+		fmt.Printf("DEBUG (Compiler): Compiling Identifier '%s'\n", expr.Name) // ADDED DEBUG
 		symbol, ok := c.currentScope.Resolve(expr.Name)
 		if !ok {
 			return fmt.Errorf("undefined variable '%s'", expr.Name)
 		}
 		switch symbol.Kind {
 		case Global:
+			fmt.Printf("DEBUG (Compiler): Identifier '%s' resolved as GLOBAL (index %d)\n", symbol.Name, symbol.Index) // ADDED DEBUG
 			c.emit(OpGetGlobal, symbol.Index)
 		case Local, Parameter:
-			c.emit(OpGetLocal, symbol.Index) // <-- Emit OpGetLocal directly
+			fmt.Printf("DEBUG (Compiler): Identifier '%s' resolved as LOCAL/PARAMETER (index %d)\n", symbol.Name, symbol.Index) // ADDED DEBUG
+			c.emit(OpGetLocal, symbol.Index)                                                                                    // <-- Emit OpGetLocal directly
 		case Builtin:
-			c.emit(OpGetGlobal, symbol.Index)
+			fmt.Printf("DEBUG (Compiler): Identifier '%s' resolved as BUILTIN (index %d)\n", symbol.Name, symbol.Index) // ADDED DEBUG
+			c.emit(OpGetGlobal, symbol.Index)                                                                           // Builtins are stored in globals
 		case Free:
+			fmt.Printf("DEBUG (Compiler): Identifier '%s' resolved as FREE (index %d)\n", symbol.Name, symbol.Index) // ADDED DEBUG
 			c.emit(OpGetFree, symbol.Index)
 		default:
 			return fmt.Errorf("unsupported symbol kind for get: %v", symbol.Kind)
 		}
 
 	case *ast.BinaryExpr: // Assuming ast.BinaryExpr exists
+		fmt.Printf("DEBUG (Compiler): Compiling BinaryExpr with operator '%s'\n", expr.Operator) // ADDED DEBUG
+
 		// Handle short-circuiting for 'and' and 'or'.
 		if expr.Operator == "and" { // Assuming Operator field exists
 			// Compile the left side. It leaves a boolean value on the stack.
-			if err := c.compileExpression(expr.Left); err != nil { // Assuming Left field exists
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'and' - Compiling Left side...") // ADDED DEBUG
+			if err := c.compileExpression(expr.Left); err != nil {                     // Assuming Left field exists
 				return err
 			}
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'and' - Finished Left side compile. Emitting OpJumpNotTruthy...") // ADDED DEBUG
+
 			// If the left side is false (or nil), jump over the right side compilation.
 			// The falsy value is already on the stack and is the result of the 'and' if short-circuited.
-			jumpFalsePos := c.emit(OpJumpNotTruthy, 0) // Use OpJumpNotTruthy from code.go
+			jumpFalsePos := c.emit(OpJumpNotTruthy, 0)                                  // Use OpJumpNotTruthy from code.go
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'and' - Emitted OpJumpNotTruthy") // ADDED DEBUG
 
 			// If the left side was true, pop its value (we only need the right side's value for the result).
-			c.emit(OpPop) // Use OpPop from code.go
+			c.emit(OpPop)                                                                                              // Use OpPop from code.go
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'and' - Emitted OpPop (for true case). Compiling Right side...") // ADDED DEBUG
 
 			// Compile the right side. It leaves a boolean value on the stack.
 			if err := c.compileExpression(expr.Right); err != nil { // Assuming Right field exists
 				return err
 			}
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'and' - Finished Right side compile. Patching jump...") // ADDED DEBUG
 
 			// Patch the jump instruction to point to the instruction immediately after the right side compilation.
-			c.patchJump(jumpFalsePos, len(c.instructions)) // Pass the target position (current length)
+			c.patchJump(jumpFalsePos, len(c.instructions))                    // Pass the target position (current length)
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'and' - Jump patched.") // ADDED DEBUG
 			// The result of the expression (either Left's falsy value or Right's value) is now on the stack.
 
 		} else if expr.Operator == "or" { // Assuming Operator field exists
 			// Compile the left side. It leaves a boolean value on the stack.
-			if err := c.compileExpression(expr.Left); err != nil { // Assuming Left field exists
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'or' - Compiling Left side...") // ADDED DEBUG
+			if err := c.compileExpression(expr.Left); err != nil {                    // Assuming Left field exists
 				return err
 			}
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'or' - Finished Left side compile. Emitting OpJumpTruthy...") // ADDED DEBUG
+
 			// If the left side is true (or not nil), jump over the right side compilation.
 			// The truthy value is already on the stack and is the result of the 'or' if short-circuited.
-			jumpTruePos := c.emit(OpJumpTruthy, 0) // Use OpJumpTruthy from code.go
+			jumpTruePos := c.emit(OpJumpTruthy, 0)                                  // Use OpJumpTruthy from code.go
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'or' - Emitted OpJumpTruthy") // ADDED DEBUG
 
 			// If the left side was false, pop its value (we only need the right side's value for the result).
-			c.emit(OpPop) // Use OpPop from code.go
+			c.emit(OpPop)                                                                                              // Use OpPop from code.go
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'or' - Emitted OpPop (for false case). Compiling Right side...") // ADDED DEBUG
 
 			// Compile the right side. It leaves a boolean value on the stack.
 			if err := c.compileExpression(expr.Right); err != nil { // Assuming Right field exists
 				return err
 			}
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'or' - Finished Right side compile. Patching jump...") // ADDED DEBUG
 
 			// Patch the jump instruction to point to the instruction immediately after the right side compilation.
-			c.patchJump(jumpTruePos, len(c.instructions)) // Pass the target position (current length)
+			c.patchJump(jumpTruePos, len(c.instructions))                    // Pass the target position (current length)
+			fmt.Println("DEBUG (Compiler): BinaryExpr 'or' - Jump patched.") // ADDED DEBUG
 			// The result of the expression (either Left's falsy value or Right's value) is now on the stack.
 
 		} else {
 			// For other binary operators (+, -, *, /, %, ^, ==, !=, <, >, <=, >=).
+			fmt.Printf("DEBUG (Compiler): BinaryExpr '%s' - Starting Left side compile...\n", expr.Operator) // ADDED DEBUG
 			// Compile the left side first. It leaves its result on the stack.
 			if err := c.compileExpression(expr.Left); err != nil { // Assuming Left field exists
 				return err
 			}
+			// *** Execution should proceed past here if err is nil ***
+			fmt.Printf("DEBUG (Compiler): BinaryExpr '%s' - Finished Left side compile. Starting Right side compile...\n", expr.Operator) // ADDED DEBUG
 			// Compile the right side second. It leaves its result on the stack.
 			if err := c.compileExpression(expr.Right); err != nil { // Assuming Right field exists
 				return err
 			}
+			fmt.Printf("DEBUG (Compiler): BinaryExpr '%s' - Finished Right side compile. Emitting operator...\n", expr.Operator) // ADDED DEBUG
 
 			// Emit the opcode corresponding to the operator.
 			// The VM will pop the two operands, perform the operation, and push the result.
 			switch expr.Operator { // Assuming Operator field exists
 			case "+":
-				c.emit(OpAdd) // Use OpAdd from code.go
+				c.emit(OpAdd)                                  // Use OpAdd from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpAdd") // ADDED DEBUG
 			case "-":
-				c.emit(OpSub) // Use OpSub from code.go
+				c.emit(OpSub)                                  // Use OpSub from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpSub") // ADDED DEBUG
 			case "*":
-				c.emit(OpMul) // Use OpMul from code.go
+				c.emit(OpMul)                                  // Use OpMul from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpMul") // ADDED DEBUG
 			case "/":
-				c.emit(OpDiv) // Use OpDiv from code.go
+				c.emit(OpDiv)                                  // Use OpDiv from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpDiv") // ADDED DEBUG
 			case "%":
-				c.emit(OpMod) // Use OpMod from code.go
+				c.emit(OpMod)                                  // Use OpMod from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpMod") // ADDED DEBUG
 			case "^":
-				c.emit(OpPow) // Use OpPow from code.go
+				c.emit(OpPow)                                  // Use OpPow from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpPow") // ADDED DEBUG
 			case "==":
-				c.emit(OpEqual) // Use OpEqual from code.go
+				c.emit(OpEqual)                                  // Use OpEqual from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpEqual") // ADDED DEBUG
 			case "!=":
-				c.emit(OpNotEqual) // Use OpNotEqual from code.go
+				c.emit(OpNotEqual)                                  // Use OpNotEqual from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpNotEqual") // ADDED DEBUG
 			case "<":
-				c.emit(OpLessThan) // Use OpLessThan from code.go
+				c.emit(OpLessThan)                                  // Use OpLessThan from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpLessThan") // ADDED DEBUG
 			case ">":
-				c.emit(OpGreaterThan) // Use OpGreaterThan from code.go
+				c.emit(OpGreaterThan)                                  // Use OpGreaterThan from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpGreaterThan") // ADDED DEBUG
 			case "<=":
-				c.emit(OpLessEqual) // Use OpLessEqual from code.go
+				c.emit(OpLessEqual)                                  // Use OpLessEqual from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpLessEqual") // ADDED DEBUG
 			case ">=":
-				c.emit(OpGreaterEqual) // Use OpGreaterEqual from code.go
+				c.emit(OpGreaterEqual)                                  // Use OpGreaterEqual from code.go
+				fmt.Println("DEBUG (Compiler): Emitted OpGreaterEqual") // ADDED DEBUG
 			default:
 				// This case should ideally not be reached if the parser/AST builder is correct.
 				return fmt.Errorf("unknown binary operator %s", expr.Operator)
 			}
+			fmt.Printf("DEBUG (Compiler): BinaryExpr '%s' - Finished compiling\n", expr.Operator) // ADDED DEBUG
 		}
+		// *** Execution should continue past here within the case ***
 
 	case *ast.UnaryExpr: // Assuming ast.UnaryExpr exists
+		fmt.Printf("DEBUG (Compiler): Compiling UnaryExpr with operator '%s'\n", expr.Operator) // ADDED DEBUG
 		// Compile the expression the unary operator applies to. It leaves its result on the stack.
 		if err := c.compileExpression(expr.Expr); err != nil { // Assuming Expr field exists
 			return err
@@ -461,77 +519,107 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		// The VM will pop the operand, perform the operation, and push the result.
 		switch expr.Operator { // Assuming Operator field exists
 		case "-":
-			c.emit(OpMinus) // Use OpMinus from code.go
+			c.emit(OpMinus)                                  // Use OpMinus from code.go
+			fmt.Println("DEBUG (Compiler): Emitted OpMinus") // ADDED DEBUG
 		case "not":
-			c.emit(OpNot) // Use OpNot from code.go
+			c.emit(OpNot)                                  // Use OpNot from code.go
+			fmt.Println("DEBUG (Compiler): Emitted OpNot") // ADDED DEBUG
 		case "+":
 			// Unary plus is typically a no-op semantically, but we still compile the expression.
 			// No opcode is needed unless you want to enforce type checks at runtime (e.g., enforce the operand is a number).
 			// For now, we do nothing after compiling the expression.
+			fmt.Println("DEBUG (Compiler): Unary '+' is a no-op") // ADDED DEBUG
 		default:
 			// This case should ideally not be reached.
 			return fmt.Errorf("unknown unary operator %s", expr.Operator)
 		}
+		fmt.Printf("DEBUG (Compiler): UnaryExpr '%s' - Finished compiling\n", expr.Operator) // ADDED DEBUG
 
 	case *ast.ListLiteral: // Assuming ast.ListLiteral exists
+		fmt.Printf("DEBUG (Compiler): Compiling ListLiteral with %d elements\n", len(expr.Elements)) // ADDED DEBUG
 		// Compile each element of the list. They leave their results on the stack in order.
 		count := len(expr.Elements) // Assuming Elements field exists
-		for _, el := range expr.Elements {
+		for i, el := range expr.Elements {
+			fmt.Printf("DEBUG (Compiler): Compiling ListLiteral element %d...\n", i) // ADDED DEBUG
 			if err := c.compileExpression(el); err != nil {
 				return err
 			}
+			fmt.Printf("DEBUG (Compiler): Finished compiling ListLiteral element %d\n", i) // ADDED DEBUG
 		}
 		// Emit OpArray with the number of elements.
 		// The VM will pop the elements from the stack and create a list.
-		c.emit(OpArray, count) // Use OpArray from code.go
+		c.emit(OpArray, count)                                                 // Use OpArray from code.go
+		fmt.Printf("DEBUG (Compiler): Emitted OpArray with count %d\n", count) // ADDED DEBUG
+		fmt.Println("DEBUG (Compiler): Finished compiling ListLiteral")        // ADDED DEBUG
 
 	case *ast.TableLiteral: // Assuming ast.TableLiteral exists
+		fmt.Printf("DEBUG (Compiler): Compiling TableLiteral with %d fields\n", len(expr.Fields)) // ADDED DEBUG
 		// Compile each field (key and value) of the table.
 		// Keys and values are pushed onto the stack alternatingly: key1, value1, key2, value2, ...
 		count := len(expr.Fields)       // Assuming Fields field exists
-		for _, f := range expr.Fields { // Assuming f is a struct with Key and Value fields
+		for i, f := range expr.Fields { // Assuming f is a struct with Key and Value fields
+			fmt.Printf("DEBUG (Compiler): Compiling TableLiteral field %d (key '%s')...\n", i, f.Key) // ADDED DEBUG
 			// Table keys are identifiers in the grammar, but typically evaluated to strings or other hashable values.
 			// Assuming keys are treated as strings in the bytecode/VM.
 			// Add the key string to the constant pool and emit OpConstant.
-			c.emitConstant(types.NewString(f.Key)) // Referring to types.NewString (from types package), Assuming Key field exists on f
+			c.emitConstant(types.NewString(f.Key))                                              // Referring to types.NewString (from types package), Assuming Key field exists on f
+			fmt.Printf("DEBUG (Compiler): Emitted constant for TableLiteral key '%s'\n", f.Key) // ADDED DEBUG
 			// Compile the value expression.
-			if err := c.compileExpression(f.Value); err != nil { // Assuming Value field exists on f
+			fmt.Printf("DEBUG (Compiler): Compiling TableLiteral field %d value...\n", i) // ADDED DEBUG
+			if err := c.compileExpression(f.Value); err != nil {                          // Assuming Value field exists on f
 				return err
 			}
+			fmt.Printf("DEBUG (Compiler): Finished compiling TableLiteral field %d value\n", i) // ADDED DEBUG
 		}
 		// Emit OpHash with the number of fields (key-value pairs).
 		// The VM will pop 2*count values from the stack (key, value pairs) and create a hash/table.
-		c.emit(OpHash, count) // Use OpHash from code.go
+		c.emit(OpHash, count)                                                 // Use OpHash from code.go
+		fmt.Printf("DEBUG (Compiler): Emitted OpHash with count %d\n", count) // ADDED DEBUG
+		fmt.Println("DEBUG (Compiler): Finished compiling TableLiteral")      // ADDED DEBUG
 
 	case *ast.IndexExpr: // Assuming ast.IndexExpr exists
+		fmt.Println("DEBUG (Compiler): Compiling IndexExpr") // ADDED DEBUG
 		// Compile the primary expression (the aggregate, e.g., list or table). Leaves aggregate on stack.
-		if err := c.compileExpression(expr.Primary); err != nil { // Assuming Primary field exists
+		fmt.Println("DEBUG (Compiler): IndexExpr - Compiling Primary...") // ADDED DEBUG
+		if err := c.compileExpression(expr.Primary); err != nil {         // Assuming Primary field exists
 			return err
 		}
+		fmt.Println("DEBUG (Compiler): IndexExpr - Finished Primary compile. Compiling Index...") // ADDED DEBUG
 		// Compile the index expression (e.g., integer for list, string/value for table). Leaves index on stack.
 		if err := c.compileExpression(expr.Index); err != nil { // Assuming Index field exists
 			return err
 		}
+		fmt.Println("DEBUG (Compiler): IndexExpr - Finished Index compile. Emitting OpIndex...") // ADDED DEBUG
 		// Stack top is now [..., aggregate, index].
 		// Emit OpIndex. The VM should pop index, pop aggregate, perform the index lookup, and push the result.
-		c.emit(OpIndex) // Use OpIndex from code.go
+		c.emit(OpIndex)                                               // Use OpIndex from code.go
+		fmt.Println("DEBUG (Compiler): Emitted OpIndex")              // ADDED DEBUG
+		fmt.Println("DEBUG (Compiler): Finished compiling IndexExpr") // ADDED DEBUG
 
 	case *ast.CallExpr: // Assuming ast.CallExpr exists
+		fmt.Printf("DEBUG (Compiler): Compiling CallExpr with %d arguments\n", len(expr.Args)) // ADDED DEBUG
 		// Compile the callee (the function or callable object). Leaves the callable on the stack.
-		if err := c.compileExpression(expr.Callee); err != nil { // Assuming Callee field exists
+		fmt.Println("DEBUG (Compiler): CallExpr - Compiling Callee...") // ADDED DEBUG
+		if err := c.compileExpression(expr.Callee); err != nil {        // Assuming Callee field exists
 			return err
 		}
+		fmt.Println("DEBUG (Compiler): CallExpr - Finished Callee compile. Compiling Arguments...") // ADDED DEBUG
 		// Compile each argument. Arguments are pushed onto the stack in order.
-		for _, arg := range expr.Args { // Assuming Args field exists
+		for i, arg := range expr.Args { // Assuming Args field exists
+			fmt.Printf("DEBUG (Compiler): CallExpr - Compiling Argument %d...\n", i) // ADDED DEBUG
 			if err := c.compileExpression(arg); err != nil {
 				return err
 			}
+			fmt.Printf("DEBUG (Compiler): CallExpr - Finished compiling Argument %d\n", i) // ADDED DEBUG
 		}
 		// Emit OpCall with the number of arguments.
 		// The VM will pop the arguments and the callable, set up a new frame, and execute the callable.
-		c.emit(OpCall, len(expr.Args)) // Use OpCall from code.go
+		c.emit(OpCall, len(expr.Args))                                                     // Use OpCall from code.go
+		fmt.Printf("DEBUG (Compiler): Emitted OpCall with arg count %d\n", len(expr.Args)) // ADDED DEBUG
+		fmt.Println("DEBUG (Compiler): Finished compiling CallExpr")                       // ADDED DEBUG
 
 	case *ast.FunctionLiteral: // Assuming ast.FunctionLiteral exists
+		fmt.Printf("DEBUG (Compiler): Compiling FunctionLiteral with %d parameters\n", len(expr.Params)) // ADDED DEBUG
 		// Compile the function literal itself. This doesn't compile the body yet.
 		// The body is compiled into a separate set of instructions.
 
@@ -539,22 +627,28 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		// This compiler will have its own instruction stream and a symbol table
 		// nested within the current scope of the outer compiler.
 		funcCompiler := c.newFunctionCompiler()
+		fmt.Println("DEBUG (Compiler): Created new function compiler") // ADDED DEBUG
 
 		// Enter the function's scope. This is handled by newFunctionCompiler,
 		// which creates a scope enclosed in the parent's current scope.
 		// Parameters are defined as locals in the function's symbol table.
-		for _, param := range expr.Params { // Assuming Params field exists in ast.FunctionLiteral
+		fmt.Println("DEBUG (Compiler): Defining function parameters...") // ADDED DEBUG
+		for _, param := range expr.Params {                              // Assuming Params field exists in ast.FunctionLiteral
 			// Define parameter as a Local in the function's scope.
 			// *** FIX START: Pass 'param' directly as it's a string ***
 			funcCompiler.currentScope.DefineParameter(param) // Assuming param is string, DefineLocal correctly increments numDefinitions
 			// *** FIX END ***
+			fmt.Printf("DEBUG (Compiler): Defined parameter '%s'\n", param) // ADDED DEBUG
 		}
+		fmt.Println("DEBUG (Compiler): Finished defining function parameters.") // ADDED DEBUG
 
 		// Compile the function body (the block statement).
 		// This compiles statements within the function's instruction stream.
+		fmt.Println("DEBUG (Compiler): Compiling function body...")      // ADDED DEBUG
 		if err := funcCompiler.compileStatement(expr.Body); err != nil { // Assuming Body field exists
-			return err
+			return err // Propagate error from compiling body
 		}
+		fmt.Println("DEBUG (Compiler): Finished compiling function body.") // ADDED DEBUG
 
 		// After compiling the body, check if the last instruction is a return.
 		// If not, implicitly return null.
@@ -606,9 +700,10 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		// The operand for OpClosure also includes the number of free variables.
 		// Free variables are symbols resolved in outer scopes but used within this function.
 		// The free variables are stored in the function's symbol table's freeSymbols slice.
-		numLocals := funcCompiler.currentScope.NumDefinitions() // Assuming NumDefinitions exists
-		numParameters := len(expr.Params)                       // Assuming Params field exists in ast.FunctionLiteral
-		freeSymbols := funcCompiler.currentScope.freeSymbols    // Access freeSymbols as a lowercase field
+		numLocals := funcCompiler.currentScope.NumDefinitions()                                                                                // Assuming NumDefinitions exists
+		numParameters := len(expr.Params)                                                                                                      // Assuming Params field exists in ast.FunctionLiteral
+		freeSymbols := funcCompiler.currentScope.freeSymbols                                                                                   // Access freeSymbols as a lowercase field
+		fmt.Printf("DEBUG (Compiler): Function has %d locals, %d parameters, %d free variables\n", numLocals, numParameters, len(freeSymbols)) // ADDED DEBUG
 
 		// Create the CompiledFunction object.
 		compiledFn := &types.CompiledFunction{ // Referring to types.CompiledFunction, assuming it exists
@@ -621,7 +716,8 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		}
 
 		// Add the CompiledFunction object to the main compiler's constants.
-		fnConstantIndex := c.addConstant(compiledFn) // Use addConstant method
+		fnConstantIndex := c.addConstant(compiledFn)                                                       // Use addConstant method
+		fmt.Printf("DEBUG (Compiler): Added CompiledFunction to constants at index %d\n", fnConstantIndex) // ADDED DEBUG
 
 		// Emit OpClosure. Operand is the index of the CompiledFunction constant and the number of free variables.
 		// The free variables themselves will be pushed onto the stack by the VM when OpClosure is executed.
@@ -633,34 +729,45 @@ func (c *Compiler) compileExpression(e ast.Expression) error {
 		// The order here must match the order the VM expects free variables to be on the stack
 		// when executing OpClosure. This order is determined by how freeSymbols are collected
 		// in the symbol table.
+		fmt.Println("DEBUG (Compiler): Compiling Get operations for free variables...") // ADDED DEBUG
 		// before emitting OpClosure, push the actual free values:
-		for _, s := range freeSymbols {
+		for i, s := range freeSymbols {
+			fmt.Printf("DEBUG (Compiler): Compiling Get for free variable '%s' (index %d, kind %s)...\n", s.Name, i, s.Kind) // ADDED DEBUG
 			switch s.Kind {
 			case Global:
 				c.emit(OpGetGlobal, s.Index)
+				fmt.Println("DEBUG (Compiler): Emitted OpGetGlobal for free var") // ADDED DEBUG
 			case Local, Parameter:
 				// locals in an _outer_ function scope are still accessed with GetLocal
 				c.emit(OpGetLocal, s.Index)
+				fmt.Println("DEBUG (Compiler): Emitted OpGetLocal for free var") // ADDED DEBUG
 			case Free:
 				// the real free variable capture
 				c.emit(OpGetFree, s.Index)
+				fmt.Println("DEBUG (Compiler): Emitted OpGetFree for free var") // ADDED DEBUG
 			default:
 				return fmt.Errorf("unsupported kind for free variable '%s': %v", s.Name, s.Kind)
 			}
+			fmt.Printf("DEBUG (Compiler): Finished compiling Get for free variable '%s'\n", s.Name) // ADDED DEBUG
 		}
+		fmt.Println("DEBUG (Compiler): Finished compiling Get operations for free variables.") // ADDED DEBUG
 
 		// now we know we actually pushed len(freeSymbols) values,
 		// so OpClosure’s second operand is correct:
 		c.emit(OpClosure, fnConstantIndex, len(freeSymbols))
+		fmt.Printf("DEBUG (Compiler): Emitted OpClosure with fnConstantIndex %d and free count %d\n", fnConstantIndex, len(freeSymbols)) // ADDED DEBUG
+		fmt.Println("DEBUG (Compiler): Finished compiling FunctionLiteral")                                                              // ADDED DEBUG
 
 	default:
 		// This case should ideally not be reached.
 		// --- Debug Print: Unsupported Expression ---
-		fmt.Printf("DEBUG (Compiler): Unsupported Expression type %T\n", e)
-		// --- End Debug Print ---
-		return fmt.Errorf("unsupported expression type: %T", e)
-	}
-	return nil
+		fmt.Printf("DEBUG: compileExpression saw unhandled node of type %T\n", e)
+		return fmt.Errorf("unsupported expression type %T", e)
+
+	} // End of switch
+
+	fmt.Println("DEBUG (Compiler): compileExpression finished switch, about to return nil") // ADDED DEBUG
+	return nil                                                                              // This is the function's final return
 }
 
 // compileBlockStmt compiles a block statement.
