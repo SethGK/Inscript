@@ -1,4 +1,3 @@
-// internal/ast/nodes.go
 package ast
 
 import (
@@ -7,252 +6,320 @@ import (
 
 // Node is the interface for all AST nodes.
 type Node interface {
-	Pos() token.Pos
+	Pos() token.Pos // Position of the first token associated with the node
 }
 
-// Statement is the interface for statement nodes.
+// Statement is the interface for all statement nodes.
 type Statement interface {
 	Node
-	isStatement()
+	statementNode() // Marker method to indicate it's a statement node
 }
 
-// Expression is the interface for expression nodes.
+// Expression is the interface for all expression nodes.
 type Expression interface {
 	Node
-	isExpression()
+	expressionNode() // Marker method to indicate it's an expression node
 }
 
-// Program is the root AST node.
+// --- Custom Token Type ---
+// Define a simple Token struct to hold operator information
+// This bypasses potential issues with go/token.Token if the compiler
+// is having trouble resolving it in this package context.
+type Token struct {
+	Type    int       // The token type (using the integer ID from ANTLR)
+	Pos     token.Pos // The position of the token in the source
+	Literal string    // The literal text of the token
+}
+
+// --- Statement Nodes ---
+
+// Program represents the root of the AST.
 type Program struct {
-	Stmts    []Statement // top-level statements
-	PosToken token.Pos   // position of first token
+	Stmts    []Statement
+	PosToken token.Pos // Position of the first token (usually the start of the file)
 }
 
 func (p *Program) Pos() token.Pos { return p.PosToken }
 
-// BlockStmt represents a `{ ... }` block of statements.
+// BlockStmt represents a block of statements enclosed in braces `{ ... }`.
 type BlockStmt struct {
 	Stmts    []Statement
-	PosToken token.Pos
+	PosToken token.Pos // Position of the opening brace '{'
 }
 
-func (b *BlockStmt) isStatement()   {}
+func (b *BlockStmt) statementNode() {}
 func (b *BlockStmt) Pos() token.Pos { return b.PosToken }
 
-// ExprStmt wraps an expression as a statement.
+// ExprStmt represents a statement that is just an expression.
 type ExprStmt struct {
 	Expr     Expression
-	PosToken token.Pos
+	PosToken token.Pos // Position of the start of the expression
 }
 
-func (e *ExprStmt) isStatement()   {}
+func (e *ExprStmt) statementNode() {}
 func (e *ExprStmt) Pos() token.Pos { return e.PosToken }
 
-// AssignStmt represents `target = value`.
+// AssignStmt represents an assignment statement: `target op value`.
 type AssignStmt struct {
-	Target   Expression
+	Target   Expression // Target can be Identifier, IndexExpr, AttrExpr
+	Op       Token      // Assignment operator (using custom Token struct)
 	Value    Expression
-	PosToken token.Pos
+	PosToken token.Pos // Position of the target
 }
 
-func (a *AssignStmt) isStatement()   {}
+func (a *AssignStmt) statementNode() {}
 func (a *AssignStmt) Pos() token.Pos { return a.PosToken }
 
-// PrintStmt represents `print(exprList)`.
-type PrintStmt struct {
-	Exprs    []Expression
-	PosToken token.Pos
-}
-
-func (p *PrintStmt) isStatement()   {}
-func (p *PrintStmt) Pos() token.Pos { return p.PosToken }
-
-// ReturnStmt represents `return expr?`.
-type ReturnStmt struct {
-	Expr     Expression // may be nil
-	PosToken token.Pos
-}
-
-func (r *ReturnStmt) isStatement()   {}
-func (r *ReturnStmt) Pos() token.Pos { return r.PosToken }
-
-// IfStmt represents an if-elseif-else chain.
+// IfStmt represents an if-else if-else statement.
 type IfStmt struct {
 	Cond     Expression
 	Then     *BlockStmt
-	ElseIfs  []ElseIf
-	Else     *BlockStmt // may be nil
-	PosToken token.Pos
+	ElseIfs  []ElseIf   // Slice of ElseIf blocks
+	Else     *BlockStmt // Optional else block (nil if not present)
+	PosToken token.Pos  // Position of the 'if' keyword
 }
 
+// ElseIf represents an else if block within an IfStmt.
 type ElseIf struct {
 	Cond     Expression
 	Body     *BlockStmt
-	PosToken token.Pos
+	PosToken token.Pos // Position of the 'else' keyword for this block
 }
 
-func (i *IfStmt) isStatement()   {}
+func (i *IfStmt) statementNode() {}
 func (i *IfStmt) Pos() token.Pos { return i.PosToken }
 
-// WhileStmt represents `while cond { ... }`.
+// WhileStmt represents a while loop: `while cond { body }`.
 type WhileStmt struct {
 	Cond     Expression
 	Body     *BlockStmt
-	PosToken token.Pos
+	PosToken token.Pos // Position of the 'while' keyword
 }
 
-func (w *WhileStmt) isStatement()   {}
+func (w *WhileStmt) statementNode() {}
 func (w *WhileStmt) Pos() token.Pos { return w.PosToken }
 
-// ForStmt represents `for ident in expr { ... }`.
+// ForStmt represents a for-in loop: `for variable in iterable { body }`.
 type ForStmt struct {
-	Variable string
+	Variable string // The loop variable name
 	Iterable Expression
 	Body     *BlockStmt
-	PosToken token.Pos
+	PosToken token.Pos // Position of the 'for' keyword
 }
 
-func (f *ForStmt) isStatement()   {}
+func (f *ForStmt) statementNode() {}
 func (f *ForStmt) Pos() token.Pos { return f.PosToken }
 
-// FuncDefStmt represents `function(params) { body }` when used as a statement (e.g., named function declaration).
-// Note: If your language only supports anonymous function literals assigned to variables, you might not need this.
-type FuncDefStmt struct {
-	Name     string // optional: empty for anonymous
-	Params   []string
-	Body     *BlockStmt
-	PosToken token.Pos
+// FunctionDef represents a function definition statement: `function name(params) -> type? { body }`.
+type FunctionDef struct {
+	Name       string // Function name
+	Params     []Param
+	ReturnType *TypeAnnotation // Optional return type annotation (nil if not present)
+	Body       *BlockStmt
+	PosToken   token.Pos // Position of the 'function' keyword
 }
 
-func (f *FuncDefStmt) isStatement()   {}
-func (f *FuncDefStmt) Pos() token.Pos { return f.PosToken }
+func (f *FunctionDef) statementNode() {}
+func (f *FunctionDef) Pos() token.Pos { return f.PosToken }
 
-// -- Expression nodes --
+// Param represents a function parameter: `name = defaultValue? : type?` or `... name`.
+type Param struct {
+	Name         string
+	DefaultValue Expression      // Optional default value (nil if not present)
+	Type         *TypeAnnotation // Optional type annotation (nil if not present)
+	IsVariadic   bool            // True if this is a variadic parameter (...)
+	PosToken     token.Pos       // Position of the parameter name or '...'
+}
 
-// BinaryExpr represents `left op right`.
+// TypeAnnotation represents a type annotation: `identifier`.
+type TypeAnnotation struct {
+	Name     string    // The type name (currently just an identifier)
+	PosToken token.Pos // Position of the identifier
+}
+
+// BreakStmt represents a break statement.
+type BreakStmt struct {
+	PosToken token.Pos // Position of the 'break' keyword
+}
+
+func (b *BreakStmt) statementNode() {}
+func (b *BreakStmt) Pos() token.Pos { return b.PosToken }
+
+// ContinueStmt represents a continue statement.
+type ContinueStmt struct {
+	PosToken token.Pos // Position of the 'continue' keyword
+}
+
+func (c *ContinueStmt) statementNode() {}
+func (c *ContinueStmt) Pos() token.Pos { return c.PosToken }
+
+// ReturnStmt represents a return statement: `return expression?`.
+type ReturnStmt struct {
+	Expr     Expression // Optional return value (nil if not present)
+	PosToken token.Pos  // Position of the 'return' keyword
+}
+
+func (r *ReturnStmt) statementNode() {}
+func (r *ReturnStmt) Pos() token.Pos { return r.PosToken }
+
+// ImportStmt represents an import statement: `import string`.
+type ImportStmt struct {
+	Path     string    // The path string (unquoted)
+	PosToken token.Pos // Position of the 'import' keyword
+}
+
+func (i *ImportStmt) statementNode() {}
+func (i *ImportStmt) Pos() token.Pos { return i.PosToken }
+
+// PrintStmt represents a print statement: `print(expressions...)`.
+type PrintStmt struct {
+	Exprs    []Expression // List of expressions to print
+	PosToken token.Pos    // Position of the 'print' keyword
+}
+
+func (p *PrintStmt) statementNode() {}
+func (p *PrintStmt) Pos() token.Pos { return p.PosToken }
+
+// --- Expression Nodes ---
+
+// BinaryExpr represents a binary operation: `left operator right`.
 type BinaryExpr struct {
 	Left     Expression
-	Operator string
+	Operator Token // The operator token (using custom Token struct)
 	Right    Expression
-	PosToken token.Pos
+	PosToken token.Pos // Position of the operator
 }
 
-func (b *BinaryExpr) isExpression()  {}
-func (b *BinaryExpr) Pos() token.Pos { return b.PosToken }
+func (b *BinaryExpr) expressionNode() {}
+func (b *BinaryExpr) Pos() token.Pos  { return b.PosToken }
 
-// UnaryExpr represents `op expr`.
+// UnaryExpr represents a unary operation: `operator expression`.
 type UnaryExpr struct {
-	Operator string
+	Operator Token // The operator token (using custom Token struct)
 	Expr     Expression
-	PosToken token.Pos
+	PosToken token.Pos // Position of the operator
 }
 
-func (u *UnaryExpr) isExpression()  {}
-func (u *UnaryExpr) Pos() token.Pos { return u.PosToken }
+func (u *UnaryExpr) expressionNode() {}
+func (u *UnaryExpr) Pos() token.Pos  { return u.PosToken }
 
-// Literal nodes
-
-type IntegerLiteral struct {
-	Value    int64
-	PosToken token.Pos
+// CallExpr represents a function call: `callee(args...)`.
+type CallExpr struct {
+	Callee   Expression   // The expression being called (e.g., an Identifier or another CallExpr)
+	Args     []Expression // List of arguments
+	PosToken token.Pos    // Position of the opening parenthesis '('
 }
 
-func (i *IntegerLiteral) isExpression()  {}
-func (i *IntegerLiteral) Pos() token.Pos { return i.PosToken }
+func (c *CallExpr) expressionNode() {}
+func (c *CallExpr) Pos() token.Pos  { return c.PosToken }
 
-type FloatLiteral struct {
-	Value    float64
-	PosToken token.Pos
+// IndexExpr represents an index access: `primary[index]`.
+type IndexExpr struct {
+	Primary  Expression // The expression being indexed (e.g., an Identifier or CallExpr)
+	Index    Expression // The index expression
+	PosToken token.Pos  // Position of the opening bracket '['
 }
 
-func (f *FloatLiteral) isExpression()  {}
-func (f *FloatLiteral) Pos() token.Pos { return f.PosToken }
+func (i *IndexExpr) expressionNode() {}
+func (i *IndexExpr) Pos() token.Pos  { return i.PosToken }
 
-type StringLiteral struct {
-	Value    string
-	PosToken token.Pos
+// AttrExpr represents an attribute access: `primary.attribute`.
+type AttrExpr struct {
+	Primary   Expression // The expression whose attribute is being accessed
+	Attribute string     // The attribute name (Identifier text)
+	PosToken  token.Pos  // Position of the dot '.'
 }
 
-func (s *StringLiteral) isExpression()  {}
-func (s *StringLiteral) Pos() token.Pos { return s.PosToken }
+func (a *AttrExpr) expressionNode() {}
+func (a *AttrExpr) Pos() token.Pos  { return a.PosToken }
 
-type BooleanLiteral struct {
-	Value    bool
-	PosToken token.Pos
-}
-
-func (b *BooleanLiteral) isExpression()  {}
-func (b *BooleanLiteral) Pos() token.Pos { return b.PosToken }
-
-// NilLiteral represents `nil`.
-type NilLiteral struct{ PosToken token.Pos }
-
-func (n *NilLiteral) isExpression()  {}
-func (n *NilLiteral) Pos() token.Pos { return n.PosToken }
-
-// Identifier represents a variable name.
+// Identifier represents a variable or function name.
 type Identifier struct {
 	Name     string
-	PosToken token.Pos
+	PosToken token.Pos // Position of the identifier token
 }
 
-func (i *Identifier) isExpression()  {}
-func (i *Identifier) Pos() token.Pos { return i.PosToken }
+func (i *Identifier) expressionNode() {}
+func (i *Identifier) Pos() token.Pos  { return i.PosToken }
 
-// CallExpr represents a function call: `fn(args...)`.
-type CallExpr struct {
-	Callee   Expression
-	Args     []Expression
-	PosToken token.Pos
+// --- Literal Nodes ---
+
+// IntegerLiteral represents an integer literal (e.g., 123).
+type IntegerLiteral struct {
+	Value    int64
+	PosToken token.Pos // Position of the number token
 }
 
-func (c *CallExpr) isExpression()  {}
-func (c *CallExpr) Pos() token.Pos { return c.PosToken }
+func (i *IntegerLiteral) expressionNode() {}
+func (i *IntegerLiteral) Pos() token.Pos  { return i.PosToken }
 
-// IndexExpr represents `primary[index]`.
-type IndexExpr struct {
-	Primary  Expression
-	Index    Expression
-	PosToken token.Pos
+// FloatLiteral represents a floating-point literal (e.g., 1.23).
+type FloatLiteral struct {
+	Value    float64
+	PosToken token.Pos // Position of the number token
 }
 
-func (i *IndexExpr) isExpression()  {}
-func (i *IndexExpr) Pos() token.Pos { return i.PosToken }
+func (f *FloatLiteral) expressionNode() {}
+func (f *FloatLiteral) Pos() token.Pos  { return f.PosToken }
 
-// ListLiteral represents `[expr,...]`.
+// StringLiteral represents a string literal (e.g., "hello" or 'world').
+type StringLiteral struct {
+	Value    string    // The unquoted string value
+	PosToken token.Pos // Position of the string token
+}
+
+func (s *StringLiteral) expressionNode() {}
+func (s *StringLiteral) Pos() token.Pos  { return s.PosToken }
+
+// BooleanLiteral represents a boolean literal (`true` or `false`).
+type BooleanLiteral struct {
+	Value    bool
+	PosToken token.Pos // Position of the boolean token
+}
+
+func (b *BooleanLiteral) expressionNode() {}
+func (b *BooleanLiteral) Pos() token.Pos  { return b.PosToken }
+
+// NilLiteral represents the `nil` literal.
+type NilLiteral struct {
+	PosToken token.Pos // Position of the 'nil' token
+}
+
+func (n *NilLiteral) expressionNode() {}
+func (n *NilLiteral) Pos() token.Pos  { return n.PosToken }
+
+// ListLiteral represents a list literal: `[elements...]`.
 type ListLiteral struct {
 	Elements []Expression
-	PosToken token.Pos
+	PosToken token.Pos // Position of the opening bracket '['
 }
 
-func (l *ListLiteral) isExpression()  {}
-func (l *ListLiteral) Pos() token.Pos { return l.PosToken }
+func (l *ListLiteral) expressionNode() {}
+func (l *ListLiteral) Pos() token.Pos  { return l.PosToken }
 
-// TableLiteral represents `{ key=expr,... }`.
+// TableLiteral represents a table literal: `{ fields... }`.
 type TableLiteral struct {
-	Fields   []Field
-	PosToken token.Pos
+	Fields   []TableField
+	PosToken token.Pos // Position of the opening brace '{'
 }
 
-func (t *TableLiteral) isExpression()  {}
-func (t *TableLiteral) Pos() token.Pos { return t.PosToken }
+func (t *TableLiteral) expressionNode() {}
+func (t *TableLiteral) Pos() token.Pos  { return t.PosToken }
 
-// FunctionLiteral represents a function definition used as an expression: `function(params) { body }`.
-// This node implements the Expression interface.
-type FunctionLiteral struct {
-	Params   []string
-	Body     *BlockStmt
-	PosToken token.Pos
-}
-
-func (f *FunctionLiteral) isExpression()  {} // Implements Expression interface
-func (f *FunctionLiteral) Pos() token.Pos { return f.PosToken }
-
-// Field is a key/value pair in a table literal.
-type Field struct {
-	Key      string
+// TableField represents a key-value pair in a table literal: `key = value`.
+type TableField struct {
+	Key      Expression // Key can be Identifier, StringLiteral, or other Expression (from tableKey rule)
 	Value    Expression
-	PosToken token.Pos
+	PosToken token.Pos // Position of the key or the '=' sign
 }
 
-// Note: Field does not implement Node directly; accessed via its container.
+// FunctionLiteral represents a function definition used as an expression: `function(params) -> type? { body }`.
+type FunctionLiteral struct {
+	Params     []Param
+	ReturnType *TypeAnnotation // Optional return type annotation (nil if not present)
+	Body       *BlockStmt
+	PosToken   token.Pos // Position of the 'function' keyword
+}
+
+func (f *FunctionLiteral) expressionNode() {}
+func (f *FunctionLiteral) Pos() token.Pos  { return f.PosToken }
