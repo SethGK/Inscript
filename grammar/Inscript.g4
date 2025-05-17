@@ -1,10 +1,8 @@
-// Inscript.g4
-
 grammar Inscript;
 
 // Parser Rules
 
-program: (statement? NEWLINE*)* EOF;
+program: (statement NEWLINE*)* EOF;
 
 statement
     : exprStmt
@@ -21,18 +19,18 @@ statement
     | block
     ;
 
-block: LBRACE (statement? NEWLINE*)* RBRACE;
+block: LBRACE (statement NEWLINE*)* RBRACE;
 
 exprStmt: expression;
 
 assignment
-    : target ASSIGN expression
+    : target (ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | POW_ASSIGN) expression
     ;
 
 target
     : IDENTIFIER
-    | indexExpr
-    | attrExpr
+    | postfixExpr LBRACK expression RBRACK
+    | postfixExpr DOT IDENTIFIER
     ;
 
 ifStmt
@@ -66,8 +64,10 @@ returnStmt: RETURN expression?;
 importStmt: IMPORT STRING;
 printStmt: PRINT LPAREN (expression (COMMA expression)*)? RPAREN;
 
+// Fix the left recursion in expression rules
 expression
-    : expression POW expression         #expExpr
+    : unaryExpr                         #unaryExpression
+    | expression POW expression         #expExpr
     | expression MUL expression         #mulExpr
     | expression DIV expression         #divExpr
     | expression IDIV expression        #idivExpr
@@ -87,11 +87,23 @@ expression
     | expression NEQ expression         #neqExpr
     | expression AND expression         #andExpr
     | expression OR expression          #orExpr
-    | NOT expression                    #notExpr
-    | BITNOT expression                 #bitnotExpr
-    | SUB expression                    #negExpr
-    | primary                           #primaryExpr
     ;
+
+unaryExpr
+    : NOT unaryExpr                     #notExpr
+    | BITNOT unaryExpr                  #bitnotExpr
+    | SUB unaryExpr                     #negExpr
+    | postfixExpr                       #postfixExpression
+    ;
+    
+postfixExpr
+    : primary                                          #primaryPostfix
+    | postfixExpr LPAREN argList? RPAREN              #callPostfix
+    | postfixExpr LBRACK expression RBRACK            #indexPostfix
+    | postfixExpr DOT IDENTIFIER                      #attrPostfix
+    ;
+    
+argList: expression (COMMA expression)*;
 
 primary
     : literal
@@ -100,14 +112,12 @@ primary
     | LPAREN expression (COMMA expression)+ RPAREN // tuple
     | listLiteral
     | tableLiteral
-    | callExpr
-    | indexExpr
-    | attrExpr
     ;
 
-callExpr: expression LPAREN (expression (COMMA expression)*)? RPAREN;
-indexExpr: expression LBRACK expression RBRACK;
-attrExpr: expression DOT IDENTIFIER;
+// Remove now unused rules
+// callExpr: expression LPAREN (expression (COMMA expression)*)? RPAREN;
+// indexExpr: expression LBRACK expression RBRACK;
+// attrExpr: expression DOT IDENTIFIER;
 
 literal
     : NUMBER
@@ -118,8 +128,9 @@ literal
     ;
 
 listLiteral: LBRACK (expression (COMMA expression)*)? RBRACK;
-tableLiteral: LBRACE (tableEntry (COMMA tableEntry)*)? RBRACE;
-tableEntry: (expression | STRING | NUMBER) ASSIGN expression;
+tableLiteral: LBRACE (tableKeyValue (COMMA tableKeyValue)*)? RBRACE;
+tableKeyValue: tableKey ASSIGN expression;
+tableKey: expression | STRING | IDENTIFIER;
 
 // Lexer Rules
 
@@ -140,7 +151,7 @@ NIL: 'nil';
 AND: 'and';
 OR: 'or';
 NOT: 'not';
-POW: '\^\^';
+POW: '^^';
 ADD: '+';
 SUB: '-';
 MUL: '*';
@@ -148,8 +159,8 @@ DIV: '/';
 IDIV: '//' ;
 MOD: '%';
 BITAND: '&';
-BITOR: '\|';
-BITXOR: '\^';
+BITOR: '|';
+BITXOR: '^';
 BITNOT: '~';
 SHL: '<<';
 SHR: '>>';
@@ -161,6 +172,11 @@ LE: '<=';
 GT: '>';
 GE: '>=';
 ASSIGN: '=';
+ADD_ASSIGN: '+=';
+SUB_ASSIGN: '-=';
+MUL_ASSIGN: '*=';
+DIV_ASSIGN: '/=';
+POW_ASSIGN: '^^=';
 ARROW: '->';
 
 LPAREN: '(';
@@ -177,17 +193,17 @@ ELLIPSIS: '...';
 IDENTIFIER: [a-zA-Z_][a-zA-Z0-9_]*;
 NUMBER: [0-9]+ ('.' [0-9]+)?;
 STRING
-    : '"' (ESC_SEQ | ~["\\\n\r])* '"'
-    | '\'' (ESC_SEQ | ~['\\\n\r])* '\''
+    : '"' ( ESC_SEQ | ~["\\\r\n] )* '"'
+    | '\'' ( ESC_SEQ | ~['\\\r\n] )* '\''
     | '"""' .*? '"""'
-    | "'''" .*? "'''"
+    | '\'\'\'' .*? '\'\'\''
     ;
 
 fragment ESC_SEQ: '\\' [btnr"'\\];
 
-COMMENT: '#' ~[\n\r]* -> skip;
+COMMENT: '#' ~[\r\n]* -> skip;
 MULTILINE_COMMENT: '#' .*? '#' -> skip;
-BLOCK_COMMENT: '/\*' .*? '\*/' -> skip;
+BLOCK_COMMENT: '/*' .*? '*/' -> skip;
 
 NEWLINE: [\r\n]+;
 WS: [ \t]+ -> skip;
