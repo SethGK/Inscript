@@ -1,8 +1,10 @@
-// Package bytecode defines the opcodes and helpers for making and decoding instructions.
+// Package compiler defines opcodes and helpers for bytecode instructions.
 package compiler
 
 import (
 	"fmt"
+
+	"github.com/SethGK/Inscript/internal/types"
 )
 
 // Opcode is a single byte code that identifies the operation.
@@ -12,10 +14,18 @@ type Opcode byte
 var operandWidths = map[Opcode][]int{
 	OpConstant:      {2}, // constant pool index (uint16)
 	OpSetGlobal:     {2}, // global name index
+	OpGetGlobal:     {2}, // global name index
+	OpSetLocal:      {1}, // local slot index
+	OpGetLocal:      {1}, // local slot index
+	OpSetFree:       {1}, // free slot index
+	OpGetFree:       {1}, // free slot index
 	OpJump:          {2}, // jump offset
 	OpJumpNotTruthy: {2}, // jump offset
+	OpJumpTruthy:    {2}, // jump offset for 'or'
 	OpCall:          {1}, // argument count
 	OpPrint:         {1}, // number of expressions
+	OpGetIter:       {},  // no operands
+	OpIterNext:      {2}, // exit jump offset
 }
 
 // Opcode definitions
@@ -41,11 +51,16 @@ const (
 
 	OpJumpNotTruthy
 	OpJump
+	OpJumpTruthy
 
 	OpNull // explicit nil/None
 
 	OpGetGlobal
 	OpSetGlobal
+	OpGetLocal
+	OpSetLocal
+	OpGetFree
+	OpSetFree
 
 	OpArray // create array literal
 
@@ -54,6 +69,10 @@ const (
 	OpReturn
 
 	OpPrint
+
+	// Iterator opcodes
+	OpGetIter
+	OpIterNext
 )
 
 // Instructions is a slice of bytecode instructions.
@@ -75,11 +94,12 @@ func Make(op Opcode, operands ...int) []byte {
 		width := widths[i]
 		switch width {
 		case 2:
-			// big-endian uint16
 			ins[offset] = byte(operand >> 8)
 			ins[offset+1] = byte(operand)
 		case 1:
 			ins[offset] = byte(operand)
+		case 0:
+			// no operand
 		default:
 			panic(fmt.Sprintf("unsupported operand width %d", width))
 		}
@@ -98,13 +118,14 @@ func ReadOperand(ins Instructions, offset, width int) (int, int) {
 		return (hi << 8) | lo, 2
 	case 1:
 		return int(ins[offset]), 1
+	case 0:
+		return 0, 0
 	default:
 		panic(fmt.Sprintf("unsupported operand width %d", width))
 	}
 }
 
 // ReadOperands decodes all operands for op starting at offset.
-// It returns the slice of operand values and total bytes read.
 func ReadOperands(op Opcode, ins Instructions, offset int) ([]int, int) {
 	widths := operandWidths[op]
 	operands := make([]int, len(widths))
@@ -179,12 +200,24 @@ func (op Opcode) String() string {
 		return "OpJumpNotTruthy"
 	case OpJump:
 		return "OpJump"
+	case OpJumpTruthy:
+		return "OpJumpTruthy"
 	case OpNull:
 		return "OpNull"
 	case OpGetGlobal:
 		return "OpGetGlobal"
 	case OpSetGlobal:
 		return "OpSetGlobal"
+	case OpGetLocal:
+		return "OpGetLocal"
+	case OpSetLocal:
+		return "OpSetLocal"
+	case OpGetFree:
+		return "OpGetFree"
+	case OpSetFree:
+		return "OpSetFree"
+	case OpArray:
+		return "OpArray"
 	case OpCall:
 		return "OpCall"
 	case OpReturnValue:
@@ -193,7 +226,20 @@ func (op Opcode) String() string {
 		return "OpReturn"
 	case OpPrint:
 		return "OpPrint"
+	case OpGetIter:
+		return "OpGetIter"
+	case OpIterNext:
+		return "OpIterNext"
 	default:
 		return fmt.Sprintf("Opcode(%d)", op)
 	}
+}
+
+// Bytecode holds compiled instructions and metadata.
+type Bytecode struct {
+	Instructions  Instructions
+	Constants     []types.Value // use types.Value for constant pool
+	NumLocals     int
+	NumParameters int
+	NumGlobals    int
 }
