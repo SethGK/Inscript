@@ -26,6 +26,23 @@ var operandWidths = map[Opcode][]int{
 	OpPrint:         {1}, // number of expressions
 	OpGetIter:       {},  // no operands
 	OpIterNext:      {2}, // exit jump offset
+
+	// New Opcodes and their operand widths
+	OpPow:          {},     // no operands
+	OpIDiv:         {},     // no operands
+	OpBitAnd:       {},     // no operands
+	OpBitOr:        {},     // no operands
+	OpBitXor:       {},     // no operands
+	OpShl:          {},     // no operands
+	OpShr:          {},     // no operands
+	OpGreaterEqual: {},     // no operands
+	OpLessEqual:    {},     // no operands
+	OpBitNot:       {},     // no operands
+	OpClosure:      {2, 1}, // constant pool index (uint16), free variable count (uint8)
+	OpIndex:        {},     // no operands (pops aggregate, index)
+	OpSetIndex:     {},     // no operands (pops aggregate, index, value)
+	OpTable:        {2},    // number of key-value pairs (uint16)
+	OpImport:       {2},    // string constant index for path (uint16)
 }
 
 // Opcode definitions
@@ -73,6 +90,23 @@ const (
 	// Iterator opcodes
 	OpGetIter
 	OpIterNext
+
+	// New Opcodes (continue sequence from OpIterNext)
+	OpPow
+	OpIDiv
+	OpBitAnd
+	OpBitOr
+	OpBitXor
+	OpShl
+	OpShr
+	OpGreaterEqual
+	OpLessEqual
+	OpBitNot
+	OpClosure
+	OpIndex
+	OpSetIndex
+	OpTable
+	OpImport
 )
 
 // Instructions is a slice of bytecode instructions.
@@ -230,6 +264,36 @@ func (op Opcode) String() string {
 		return "OpGetIter"
 	case OpIterNext:
 		return "OpIterNext"
+	case OpPow:
+		return "OpPow"
+	case OpIDiv:
+		return "OpIDiv"
+	case OpBitAnd:
+		return "OpBitAnd"
+	case OpBitOr:
+		return "OpBitOr"
+	case OpBitXor:
+		return "OpBitXor"
+	case OpShl:
+		return "OpShl"
+	case OpShr:
+		return "OpShr"
+	case OpGreaterEqual:
+		return "OpGreaterEqual"
+	case OpLessEqual:
+		return "OpLessEqual"
+	case OpBitNot:
+		return "OpBitNot"
+	case OpClosure:
+		return "OpClosure"
+	case OpIndex:
+		return "OpIndex"
+	case OpSetIndex:
+		return "OpSetIndex"
+	case OpTable:
+		return "OpTable"
+	case OpImport:
+		return "OpImport"
 	default:
 		return fmt.Sprintf("Opcode(%d)", op)
 	}

@@ -146,14 +146,15 @@ func (vm *VM) Run() error {
 
 		if ip >= len(instructions) {
 			if vm.framesIndex > 1 {
+				// If not the main program, pop the frame and push nil as return value
 				frame := vm.popFrame()
-				vm.sp = frame.basePointer - 1
+				vm.sp = frame.basePointer - 1 // Clean up stack for arguments and locals
 				if err := vm.push(&types.Nil{}); err != nil {
 					return err
 				}
 				continue
 			}
-			break
+			break // Exit loop if main program finishes
 		}
 
 		opcode := compiler.ReadOpcode(instructions, ip)
@@ -186,33 +187,37 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		case compiler.OpAdd, compiler.OpSub, compiler.OpMul, compiler.OpDiv, compiler.OpMod:
+		case compiler.OpAdd, compiler.OpSub, compiler.OpMul, compiler.OpDiv, compiler.OpMod, compiler.OpPow, compiler.OpIDiv:
 			err = vm.executeBinaryOperation(opcode)
 			if err != nil {
 				return err
 			}
 
-		// Placeholder for OpPow (assuming opcode 100)
-		case compiler.Opcode(100):
-			right := vm.pop()
-			left := vm.pop()
-			result, powErr := vm.executePower(left, right)
-			if powErr != nil {
-				return powErr
-			}
-			err = vm.push(result)
+		case compiler.OpBitAnd, compiler.OpBitOr, compiler.OpBitXor, compiler.OpShl, compiler.OpShr:
+			err = vm.executeBitwiseOperation(opcode)
 			if err != nil {
 				return err
 			}
 
-		case compiler.OpBang:
+		case compiler.OpBang: // Logical NOT
 			operand := vm.pop()
 			err = vm.push(types.NewBoolean(!isTruthy(operand)))
 			if err != nil {
 				return err
 			}
 
-		case compiler.OpMinus:
+		case compiler.OpBitNot: // Bitwise NOT
+			operand := vm.pop()
+			result, bitNotErr := vm.executeUnaryBitwiseNot(operand)
+			if bitNotErr != nil {
+				return bitNotErr
+			}
+			err = vm.push(result)
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpMinus: // Negation
 			operand := vm.pop()
 			switch val := operand.(type) {
 			case *types.Integer:
@@ -227,33 +232,8 @@ func (vm *VM) Run() error {
 				return types.NewError("unsupported type for negation: %s", operand.Type())
 			}
 
-		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan, compiler.OpLessThan:
+		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan, compiler.OpLessThan, compiler.OpGreaterEqual, compiler.OpLessEqual:
 			err = vm.executeComparisonOperation(opcode)
-			if err != nil {
-				return err
-			}
-
-		// Placeholder for OpGreaterEqual (assuming opcode 101)
-		case compiler.Opcode(101):
-			right := vm.pop()
-			left := vm.pop()
-			cmp, cmpErr := left.Compare(right)
-			if cmpErr != nil {
-				return types.NewError("runtime error: %s", cmpErr.Error())
-			}
-			err = vm.push(types.NewBoolean(cmp >= 0))
-			if err != nil {
-				return err
-			}
-		// Placeholder for OpLessEqual (assuming opcode 102)
-		case compiler.Opcode(102):
-			right := vm.pop()
-			left := vm.pop()
-			cmp, cmpErr := left.Compare(right)
-			if cmpErr != nil {
-				return types.NewError("runtime error: %s", cmpErr.Error())
-			}
-			err = vm.push(types.NewBoolean(cmp <= 0))
 			if err != nil {
 				return err
 			}
@@ -261,7 +241,7 @@ func (vm *VM) Run() error {
 		case compiler.OpJumpNotTruthy:
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
-			condition := vm.pop()
+			condition := vm.StackTop() // Corrected: Peek, don't pop
 			if !isTruthy(condition) {
 				currentFrame.ip += offset
 			}
@@ -274,7 +254,7 @@ func (vm *VM) Run() error {
 		case compiler.OpJumpTruthy:
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
-			condition := vm.pop()
+			condition := vm.StackTop() // Corrected: Peek, don't pop
 			if isTruthy(condition) {
 				currentFrame.ip += offset
 			}
@@ -303,21 +283,30 @@ func (vm *VM) Run() error {
 			localIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
 			value := vm.pop()
-			if currentFrame.basePointer+localIndex >= vm.sp {
-				return types.NewError("local variable index out of bounds: %d (basePointer %d, sp %d)", localIndex, currentFrame.basePointer, vm.sp)
+			if currentFrame.basePointer+localIndex >= len(vm.stack) { // Check against stack size
+				return types.NewError("local variable index out of bounds: %d (basePointer %d, stack size %d)", localIndex, currentFrame.basePointer, len(vm.stack))
 			}
 			vm.stack[currentFrame.basePointer+localIndex] = value
 
 		case compiler.OpGetLocal:
 			localIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
-			if currentFrame.basePointer+localIndex >= vm.sp {
-				return types.NewError("local variable index out of bounds: %d (basePointer %d, sp %d)", localIndex, currentFrame.basePointer, vm.sp)
+			if currentFrame.basePointer+localIndex >= len(vm.stack) { // Check against stack size
+				return types.NewError("local variable index out of bounds: %d (basePointer %d, stack size %d)", localIndex, currentFrame.basePointer, len(vm.stack))
 			}
 			err = vm.push(vm.stack[currentFrame.basePointer+localIndex])
 			if err != nil {
 				return err
 			}
+
+		case compiler.OpSetFree: // New opcode for setting free variables
+			freeIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
+			currentFrame.ip += bytesRead
+			value := vm.pop()
+			if int(freeIndex) >= len(currentFrame.closure.Free) {
+				return types.NewError("free variable index out of bounds for set: %d (max %d)", freeIndex, len(currentFrame.closure.Free)-1)
+			}
+			currentFrame.closure.Free[freeIndex] = value
 
 		case compiler.OpGetFree:
 			freeIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
@@ -330,8 +319,7 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		// Placeholder for OpClosure (assuming opcode 103)
-		case compiler.Opcode(103):
+		case compiler.OpClosure:
 			constIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			freeCount, bytesRead2 := compiler.ReadOperand(instructions, ip+1+bytesRead, 1)
 			currentFrame.ip += bytesRead + bytesRead2
@@ -343,6 +331,8 @@ func (vm *VM) Run() error {
 			}
 
 			frees := make([]types.Value, freeCount)
+			// Free variables are pushed onto the stack before OpClosure.
+			// Pop them in reverse order to maintain their original order.
 			for i := freeCount - 1; i >= 0; i-- {
 				frees[i] = vm.pop()
 			}
@@ -356,6 +346,7 @@ func (vm *VM) Run() error {
 			numElements, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
 			elements := make([]types.Value, numElements)
+			// Elements are pushed in order, so pop them in reverse to build the list
 			for i := numElements - 1; i >= 0; i-- {
 				elements[i] = vm.pop()
 			}
@@ -364,12 +355,13 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		// Placeholder for OpTable (assuming opcode 104)
-		case compiler.Opcode(104):
+		case compiler.OpTable:
 			numPairs, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
 
 			pairs := make([]types.TablePair, numPairs)
+			// Pairs are pushed as (key, value) pairs. Pop value then key.
+			// Pop in reverse order of how they were pushed.
 			for i := numPairs - 1; i >= 0; i-- {
 				value := vm.pop()
 				keyVal := vm.pop()
@@ -384,8 +376,7 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		// Placeholder for OpIndex (assuming opcode 105)
-		case compiler.Opcode(105):
+		case compiler.OpIndex:
 			index := vm.pop()
 			aggregate := vm.pop()
 			result, getErr := aggregate.GetIndex(index)
@@ -397,8 +388,7 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		// Placeholder for OpSetIndex (assuming opcode 106)
-		case compiler.Opcode(106):
+		case compiler.OpSetIndex:
 			value := vm.pop()
 			index := vm.pop()
 			aggregate := vm.pop()
@@ -406,6 +396,8 @@ func (vm *VM) Run() error {
 			if setErr != nil {
 				return types.NewError("runtime error: %s", setErr.Error())
 			}
+			// According to common VM semantics, SetIndex typically leaves the assigned value on stack
+			// or the aggregate itself. For now, pushing the value.
 			err = vm.push(value)
 			if err != nil {
 				return err
@@ -417,6 +409,10 @@ func (vm *VM) Run() error {
 			args := make([]string, numExprs)
 			for i := int(numExprs) - 1; i >= 0; i-- {
 				args[i] = vm.pop().Inspect()
+			}
+			// Corrected: Reverse the slice to print in original order
+			for i, j := 0, len(args)-1; i < j; i, j = i+1, j-1 {
+				args[i], args[j] = args[j], args[i]
 			}
 			fmt.Fprintln(vm.outputWriter, args)
 
@@ -445,13 +441,14 @@ func (vm *VM) Run() error {
 			}
 
 			if !hasNext {
-				currentFrame.ip += offset
-				vm.push(&types.Nil{})
+				currentFrame.ip += offset // Jump to exit if no more elements
+				vm.push(&types.Nil{})     // Push nil to indicate end of iteration
 			} else {
-				if err := vm.push(nextVal); err != nil {
+				if err := vm.push(nextVal); err != nil { // Push the next value
 					return err
 				}
 			}
+			// Push the iterator back onto the stack for the next iteration
 			if err := vm.push(iterator); err != nil {
 				return err
 			}
@@ -480,38 +477,60 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+			// Adjust stack pointer for new frame's locals (arguments are already on stack)
 			vm.sp = newFrame.basePointer + closure.Fn.NumLocals
 
 		case compiler.OpReturnValue:
-			returnValue := vm.pop()
+			returnValue := vm.pop() // Pop the return value
 
-			poppedFrame := vm.popFrame()
+			poppedFrame := vm.popFrame() // Pop the current frame
 
+			// Clean up stack for arguments and locals of the popped frame
 			vm.sp = poppedFrame.basePointer
 
-			err = vm.push(returnValue)
+			err = vm.push(returnValue) // Push the return value onto the previous frame's stack
 			if err != nil {
 				return err
 			}
 
 		case compiler.OpReturn:
-			poppedFrame := vm.popFrame()
+			poppedFrame := vm.popFrame() // Pop the current frame
 
+			// Clean up stack for arguments and locals of the popped frame
 			vm.sp = poppedFrame.basePointer
 
-			err = vm.push(&types.Nil{})
+			err = vm.push(&types.Nil{}) // Push nil as implicit return value
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpImport: // Handle import statement
+			pathVal := vm.pop()
+			pathStr, ok := pathVal.(*types.String)
+			if !ok {
+				return types.NewError("import path must be a string, got %s", pathVal.Type())
+			}
+			// TODO: Implement actual module loading/compilation/execution here.
+			// This would typically involve a module cache to avoid re-importing.
+			// For now, we'll just print a debug message and push nil.
+			fmt.Fprintf(vm.outputWriter, "DEBUG: Attempting to import module: %s (actual import logic not yet implemented)\n", pathStr.Value)
+			err = vm.push(&types.Nil{}) // Push nil for now, representing the imported module
 			if err != nil {
 				return err
 			}
 
 		default:
-			return types.NewError("unknown opcode: %s", opcode)
+			return types.NewError("unknown opcode: %s", opcode.String()) // Use opcode.String() for better error messages
 		}
 	}
 	return nil
 }
 
 // LastPoppedStackElem returns the last element popped from the stack.
+// Note: This method's behavior is tricky. If you need the value *after* a pop,
+// it's already returned by `pop()`. This method returns the element at `vm.stack[vm.sp]`
+// which is the new top of the stack after `sp` has been decremented by `pop()`.
+// For practical purposes, it's often better to capture the return value of `pop()`.
 func (vm *VM) LastPoppedStackElem() types.Value {
 	if vm.sp == 0 {
 		return nil
@@ -527,20 +546,22 @@ func isTruthy(obj types.Value) bool {
 	if _, isNil := obj.(*types.Nil); isNil {
 		return false
 	}
-	return true
+	return true // All other values are truthy
 }
 
-// executeBinaryOperation handles arithmetic operations.
+// executeBinaryOperation handles arithmetic and power operations.
 func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 	right := vm.pop()
 	left := vm.pop()
 
+	// String concatenation for OpAdd
 	if op == compiler.OpAdd && left.Type() == types.STRING_OBJ && right.Type() == types.STRING_OBJ {
 		leftStr := left.(*types.String).Value
 		rightStr := right.(*types.String).Value
 		return vm.push(types.NewString(leftStr + rightStr))
 	}
 
+	// Type checking for numeric operations
 	if (left.Type() != types.INTEGER_OBJ && left.Type() != types.FLOAT_OBJ) ||
 		(right.Type() != types.INTEGER_OBJ && right.Type() != types.FLOAT_OBJ) {
 		return types.NewError("type mismatch for %s: %s %s %s", op.String(), left.Type(), op.String(), right.Type())
@@ -573,18 +594,14 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 			rVal := toFloat64(right)
 			result = types.NewFloat(lVal * rVal)
 		}
-	case compiler.OpDiv:
+	case compiler.OpDiv: // Standard division (float result if any operand is float)
 		if (right.Type() == types.INTEGER_OBJ && right.(*types.Integer).Value == 0) ||
 			(right.Type() == types.FLOAT_OBJ && right.(*types.Float).Value == 0.0) {
 			return types.NewError("division by zero")
 		}
-		if left.Type() == types.INTEGER_OBJ && right.Type() == types.INTEGER_OBJ {
-			result = types.NewInteger(left.(*types.Integer).Value / right.(*types.Integer).Value)
-		} else {
-			lVal := toFloat64(left)
-			rVal := toFloat64(right)
-			result = types.NewFloat(lVal / rVal)
-		}
+		lVal := toFloat64(left)
+		rVal := toFloat64(right)
+		result = types.NewFloat(lVal / rVal)
 	case compiler.OpMod:
 		if left.Type() != types.INTEGER_OBJ || right.Type() != types.INTEGER_OBJ {
 			return types.NewError("type mismatch for modulo: expected Integer %% Integer, got %s %% %s", left.Type(), right.Type())
@@ -593,6 +610,18 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 			return types.NewError("modulo by zero")
 		}
 		result = types.NewInteger(left.(*types.Integer).Value % right.(*types.Integer).Value)
+	case compiler.OpPow: // Power operation
+		lVal := toFloat64(left)
+		rVal := toFloat64(right)
+		result = types.NewFloat(math.Pow(lVal, rVal))
+	case compiler.OpIDiv: // Integer division
+		if left.Type() != types.INTEGER_OBJ || right.Type() != types.INTEGER_OBJ {
+			return types.NewError("type mismatch for integer division: expected Integer // Integer, got %s // %s", left.Type(), right.Type())
+		}
+		if right.(*types.Integer).Value == 0 {
+			return types.NewError("integer division by zero")
+		}
+		result = types.NewInteger(left.(*types.Integer).Value / right.(*types.Integer).Value)
 	default:
 		return types.NewError("unsupported binary operation: %s", op)
 	}
@@ -600,17 +629,49 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 	return vm.push(result)
 }
 
-// executePower handles the power operation (base^exponent).
-func (vm *VM) executePower(left, right types.Value) (types.Value, error) {
-	if (left.Type() != types.INTEGER_OBJ && left.Type() != types.FLOAT_OBJ) ||
-		(right.Type() != types.INTEGER_OBJ && right.Type() != types.FLOAT_OBJ) {
-		return nil, types.NewError("type mismatch for power: %s ^ %s", left.Type(), right.Type())
+// executeBitwiseOperation handles binary bitwise operations.
+func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
+	right := vm.pop()
+	left := vm.pop()
+
+	if left.Type() != types.INTEGER_OBJ || right.Type() != types.INTEGER_OBJ {
+		return types.NewError("type mismatch for bitwise operation %s: expected Integer %s Integer, got %s %s %s", op.String(), op.String(), left.Type(), op.String(), right.Type())
 	}
 
-	lVal := toFloat64(left)
-	rVal := toFloat64(right)
+	lVal := left.(*types.Integer).Value
+	rVal := right.(*types.Integer).Value
+	var result int64
 
-	return types.NewFloat(math.Pow(lVal, rVal)), nil
+	switch op {
+	case compiler.OpBitAnd:
+		result = lVal & rVal
+	case compiler.OpBitOr:
+		result = lVal | rVal
+	case compiler.OpBitXor:
+		result = lVal ^ rVal
+	case compiler.OpShl:
+		if rVal < 0 {
+			return types.NewError("negative shift amount for left shift")
+		}
+		result = lVal << uint(rVal)
+	case compiler.OpShr:
+		if rVal < 0 {
+			return types.NewError("negative shift amount for right shift")
+		}
+		result = lVal >> uint(rVal)
+	default:
+		return types.NewError("unsupported bitwise operation: %s", op)
+	}
+	return vm.push(types.NewInteger(result))
+}
+
+// executeUnaryBitwiseNot handles the unary bitwise NOT operation.
+func (vm *VM) executeUnaryBitwiseNot(operand types.Value) (types.Value, error) {
+	if operand.Type() != types.INTEGER_OBJ {
+		return nil, types.NewError("type mismatch for bitwise NOT: expected Integer, got %s", operand.Type())
+	}
+	val := operand.(*types.Integer).Value
+	return types.NewInteger(^val), nil
 }
 
 // toFloat64 safely converts an Integer or Float Value to float64.
@@ -621,7 +682,7 @@ func toFloat64(val types.Value) float64 {
 	if f, ok := val.(*types.Float); ok {
 		return f.Value
 	}
-	return 0.0
+	return 0.0 // Should ideally be an error or panic in a robust system
 }
 
 // executeComparisonOperation handles comparison operations.
@@ -651,6 +712,20 @@ func (vm *VM) executeComparisonOperation(op compiler.Opcode) error {
 			return types.NewError("runtime error: %s", err.Error())
 		}
 		result = cmp < 0
+	case compiler.OpGreaterEqual: // New comparison
+		var cmp int
+		cmp, err = left.Compare(right)
+		if err != nil {
+			return types.NewError("runtime error: %s", err.Error())
+		}
+		result = cmp >= 0
+	case compiler.OpLessEqual: // New comparison
+		var cmp int
+		cmp, err = left.Compare(right)
+		if err != nil {
+			return types.NewError("runtime error: %s", err.Error())
+		}
+		result = cmp <= 0
 	default:
 		return types.NewError("unsupported comparison operation: %s", op)
 	}
