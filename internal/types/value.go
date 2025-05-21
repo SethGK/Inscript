@@ -195,6 +195,9 @@ func (b *Boolean) SetIndex(index Value, val Value) error {
 	return fmt.Errorf("boolean is not indexable")
 }
 
+// NewBoolean helper
+func NewBoolean(b bool) *Boolean { return &Boolean{Value: b} }
+
 // Nil value
 type Nil struct{}              // Defined in the types package
 func (n *Nil) Type() Type      { return NULL_OBJ }
@@ -290,7 +293,6 @@ func (c *Closure) GetIndex(index Value) (Value, error) {
 }
 
 func (c *Closure) SetIndex(index Value, val Value) error {
-	// Using the boilerplate from the second snippet as closures are not indexable
 	return fmt.Errorf("closure is not indexable")
 }
 
@@ -605,6 +607,11 @@ func (e *Error) GetIndex(index Value) (Value, error) {
 	return nil, fmt.Errorf("error is not indexable")
 }
 func (e *Error) SetIndex(index Value, val Value) error { return fmt.Errorf("error is not indexable") }
+
+// Error method makes Error implement the `error` interface.
+func (e *Error) Error() string {
+	return e.Message
+}
 
 // NewError helper
 func NewError(format string, a ...interface{}) *Error {

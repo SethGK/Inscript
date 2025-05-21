@@ -14,6 +14,7 @@
 #test programs
 test.ins
 test1.ins
+*.ins
 
 # Ignore the generated inscript executable in the root
 /inscript
