@@ -2,7 +2,12 @@ grammar Inscript;
 
 // Parser Rules
 
-program: (statement NEWLINE*)* EOF;
+program
+    : (   statement NEWLINE*    
+      |   NEWLINE               
+      )*
+      EOF
+    ;
 
 statement
     : exprStmt
@@ -19,7 +24,13 @@ statement
     | block
     ;
 
-block: LBRACE (statement NEWLINE*)* RBRACE;
+block
+    : LBRACE
+      (   statement NEWLINE*    // statements in a block…
+      |   NEWLINE               // …or blank lines by themselves
+      )*
+      RBRACE
+    ;
 
 exprStmt: expression;
 
@@ -37,7 +48,9 @@ ifStmt
     : IF expression block (ELSE block)?
     ;
 
-whileStmt: WHILE expression block;
+whileStmt
+    : WHILE expression block
+    ;
 
 forStmt
     : FOR IDENTIFIER IN expression block
@@ -64,7 +77,7 @@ returnStmt: RETURN expression?;
 importStmt: IMPORT STRING;
 printStmt: PRINT LPAREN (expression (COMMA expression)*)? RPAREN;
 
-// Fix the left recursion in expression rules
+// Left-recursive expression rules, unchanged
 expression
     : unaryExpr                         #unaryExpression
     | expression POW expression         #expExpr
@@ -95,29 +108,24 @@ unaryExpr
     | SUB unaryExpr                     #negExpr
     | postfixExpr                       #postfixExpression
     ;
-    
+
 postfixExpr
     : primary                                          #primaryPostfix
     | postfixExpr LPAREN argList? RPAREN              #callPostfix
     | postfixExpr LBRACK expression RBRACK            #indexPostfix
     | postfixExpr DOT IDENTIFIER                      #attrPostfix
     ;
-    
+
 argList: expression (COMMA expression)*;
 
 primary
     : literal
     | IDENTIFIER
     | LPAREN expression RPAREN
-    | LPAREN expression (COMMA expression)+ RPAREN // tuple
+    | LPAREN expression (COMMA expression)+ RPAREN     // tuple
     | listLiteral
     | tableLiteral
     ;
-
-// Remove now unused rules
-// callExpr: expression LPAREN (expression (COMMA expression)*)? RPAREN;
-// indexExpr: expression LBRACK expression RBRACK;
-// attrExpr: expression DOT IDENTIFIER;
 
 literal
     : NUMBER
@@ -132,7 +140,7 @@ tableLiteral: LBRACE (tableKeyValue (COMMA tableKeyValue)*)? RBRACE;
 tableKeyValue: tableKey ASSIGN expression;
 tableKey: expression | STRING | IDENTIFIER;
 
-// Lexer Rules
+// Lexer Rules (unchanged)...
 
 FUNCTION: 'function';
 IF: 'if';
@@ -202,7 +210,6 @@ STRING
 fragment ESC_SEQ: '\\' [btnr"'\\];
 
 COMMENT: '#' ~[\r\n]* -> skip;
-MULTILINE_COMMENT: '#' .*? '#' -> skip;
 BLOCK_COMMENT: '/*' .*? '*/' -> skip;
 
 NEWLINE: [\r\n]+;
