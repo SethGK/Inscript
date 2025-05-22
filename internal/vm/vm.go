@@ -1,4 +1,3 @@
-// Package vm implements the Inscript virtual machine.
 package vm
 
 import (
@@ -6,6 +5,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"strings" // Added for strings.Join
 
 	"github.com/SethGK/Inscript/internal/compiler"
 	"github.com/SethGK/Inscript/internal/types"
@@ -14,17 +14,16 @@ import (
 const StackSize = 2048
 const MaxFrames = 1024
 
-// VM represents the Inscript Virtual Machine.
 type VM struct {
 	constants []types.Value
 
 	stack []types.Value
-	sp    int // Stack pointer: points to the next free slot on the stack
+	sp    int // Stack pointer
 
 	globals []types.Value
 
 	frames      []*Frame // Call frames for function execution
-	framesIndex int      // Current frame index - points to the next free frame slot
+	framesIndex int
 
 	outputWriter io.Writer
 }
@@ -32,12 +31,11 @@ type VM struct {
 // Frame represents a single call frame for function execution.
 type Frame struct {
 	closure     *types.Closure // The closure being executed
-	ip          int            // Instruction pointer: points to the next instruction to execute
-	basePointer int            // Base pointer: points to the first slot in the stack used by this frame (for locals and arguments)
+	ip          int            // Instruction pointer
+	basePointer int
 }
 
 // NewFrame creates a new call frame.
-// basePointer is the stack index where this frame's locals and arguments begin.
 func NewFrame(closure *types.Closure, basePointer int) *Frame {
 	return &Frame{
 		closure:     closure,
@@ -52,7 +50,6 @@ func (f *Frame) Instructions() compiler.Instructions {
 }
 
 // New creates a new VM instance.
-// It takes the bytecode compiled by the compiler package.
 func New(bytecode *compiler.Bytecode) *VM {
 	// The main program is treated as a function (the entry point).
 	mainFn := &types.CompiledFunction{
@@ -241,9 +238,13 @@ func (vm *VM) Run() error {
 		case compiler.OpJumpNotTruthy:
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
-			condition := vm.StackTop() // Corrected: Peek, don't pop
+			condition := vm.StackTop() // Peek the condition
 			if !isTruthy(condition) {
+				// If condition is falsy, we jump. The falsy value remains on stack as the result.
 				currentFrame.ip += offset
+			} else {
+				// If condition is truthy, we don't jump. The next instruction (OpPop) will remove it.
+				// No action needed here.
 			}
 
 		case compiler.OpJump:
@@ -254,9 +255,13 @@ func (vm *VM) Run() error {
 		case compiler.OpJumpTruthy:
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
-			condition := vm.StackTop() // Corrected: Peek, don't pop
+			condition := vm.StackTop() // Peek the condition
 			if isTruthy(condition) {
+				// If condition is truthy, we jump. The truthy value remains on stack as the result.
 				currentFrame.ip += offset
+			} else {
+				// If condition is falsy, we don't jump. The next instruction (OpPop) will remove it.
+				// No action needed here.
 			}
 
 		case compiler.OpSetGlobal:
@@ -332,7 +337,6 @@ func (vm *VM) Run() error {
 
 			frees := make([]types.Value, freeCount)
 			// Free variables are pushed onto the stack before OpClosure.
-			// Pop them in reverse order to maintain their original order.
 			for i := freeCount - 1; i >= 0; i-- {
 				frees[i] = vm.pop()
 			}
@@ -346,7 +350,6 @@ func (vm *VM) Run() error {
 			numElements, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
 			elements := make([]types.Value, numElements)
-			// Elements are pushed in order, so pop them in reverse to build the list
 			for i := numElements - 1; i >= 0; i-- {
 				elements[i] = vm.pop()
 			}
@@ -360,8 +363,6 @@ func (vm *VM) Run() error {
 			currentFrame.ip += bytesRead
 
 			pairs := make([]types.TablePair, numPairs)
-			// Pairs are pushed as (key, value) pairs. Pop value then key.
-			// Pop in reverse order of how they were pushed.
 			for i := numPairs - 1; i >= 0; i-- {
 				value := vm.pop()
 				keyVal := vm.pop()
@@ -396,8 +397,6 @@ func (vm *VM) Run() error {
 			if setErr != nil {
 				return types.NewError("runtime error: %s", setErr.Error())
 			}
-			// According to common VM semantics, SetIndex typically leaves the assigned value on stack
-			// or the aggregate itself. For now, pushing the value.
 			err = vm.push(value)
 			if err != nil {
 				return err
@@ -407,14 +406,14 @@ func (vm *VM) Run() error {
 			numExprs, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
 			args := make([]string, numExprs)
-			for i := int(numExprs) - 1; i >= 0; i-- {
-				args[i] = vm.pop().Inspect()
+			// Pop elements from the stack (they come off right-to-left)
+			for i := 0; i < int(numExprs); i++ {
+				// The first item popped (rightmost in print statement) goes to the last slot in args.
+				// The last item popped (leftmost in print statement) goes to the first slot in args.
+				args[int(numExprs)-1-i] = vm.pop().Inspect()
 			}
-			// Corrected: Reverse the slice to print in original order
-			for i, j := 0, len(args)-1; i < j; i, j = i+1, j-1 {
-				args[i], args[j] = args[j], args[i]
-			}
-			fmt.Fprintln(vm.outputWriter, args)
+			// Join the arguments with a space and print the single line.
+			fmt.Fprintln(vm.outputWriter, strings.Join(args, " "))
 
 		case compiler.OpGetIter:
 			iterable := vm.pop()
@@ -429,7 +428,8 @@ func (vm *VM) Run() error {
 		case compiler.OpIterNext:
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
-			iteratorVal := vm.pop()
+
+			iteratorVal := vm.pop() // Pop the iterator to work with it
 			iterator, ok := iteratorVal.(types.Iterator)
 			if !ok {
 				return types.NewError("object is not an iterator: %s", iteratorVal.Type())
@@ -441,16 +441,20 @@ func (vm *VM) Run() error {
 			}
 
 			if !hasNext {
-				currentFrame.ip += offset // Jump to exit if no more elements
-				vm.push(&types.Nil{})     // Push nil to indicate end of iteration
-			} else {
-				if err := vm.push(nextVal); err != nil { // Push the next value
+				// If no more elements, push nil and jump to the 'after loop' instruction
+				if err := vm.push(&types.Nil{}); err != nil {
 					return err
 				}
-			}
-			// Push the iterator back onto the stack for the next iteration
-			if err := vm.push(iterator); err != nil {
-				return err
+				currentFrame.ip += offset // Jump to exit if no more elements
+			} else {
+				// If there are more elements, push the next value
+				if err := vm.push(nextVal); err != nil {
+					return err
+				}
+				// And push the iterator back for the next iteration
+				if err := vm.push(iterator); err != nil {
+					return err
+				}
 			}
 
 		case compiler.OpCall:
@@ -511,8 +515,6 @@ func (vm *VM) Run() error {
 				return types.NewError("import path must be a string, got %s", pathVal.Type())
 			}
 			// TODO: Implement actual module loading/compilation/execution here.
-			// This would typically involve a module cache to avoid re-importing.
-			// For now, we'll just print a debug message and push nil.
 			fmt.Fprintf(vm.outputWriter, "DEBUG: Attempting to import module: %s (actual import logic not yet implemented)\n", pathStr.Value)
 			err = vm.push(&types.Nil{}) // Push nil for now, representing the imported module
 			if err != nil {
@@ -527,10 +529,6 @@ func (vm *VM) Run() error {
 }
 
 // LastPoppedStackElem returns the last element popped from the stack.
-// Note: This method's behavior is tricky. If you need the value *after* a pop,
-// it's already returned by `pop()`. This method returns the element at `vm.stack[vm.sp]`
-// which is the new top of the stack after `sp` has been decremented by `pop()`.
-// For practical purposes, it's often better to capture the return value of `pop()`.
 func (vm *VM) LastPoppedStackElem() types.Value {
 	if vm.sp == 0 {
 		return nil
@@ -712,14 +710,14 @@ func (vm *VM) executeComparisonOperation(op compiler.Opcode) error {
 			return types.NewError("runtime error: %s", err.Error())
 		}
 		result = cmp < 0
-	case compiler.OpGreaterEqual: // New comparison
+	case compiler.OpGreaterEqual:
 		var cmp int
 		cmp, err = left.Compare(right)
 		if err != nil {
 			return types.NewError("runtime error: %s", err.Error())
 		}
 		result = cmp >= 0
-	case compiler.OpLessEqual: // New comparison
+	case compiler.OpLessEqual:
 		var cmp int
 		cmp, err = left.Compare(right)
 		if err != nil {
