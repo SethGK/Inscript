@@ -50,8 +50,8 @@ func (c *Compiler) Compile(program *ast.Program) (*Bytecode, error) {
 	bc := &Bytecode{
 		Instructions: c.instructions,
 		Constants:    c.constants,
-		NumLocals:    c.currentScope.NumDefinitions(),
-		NumGlobals:   c.globals.NumDefinitions(),
+		NumLocals:    0,
+		NumGlobals:   c.globals.NumGlobalsInTable(),
 	}
 	return bc, nil
 }
@@ -126,6 +126,8 @@ func (c *Compiler) compileAssignment(stmt *ast.AssignStmt) error {
 	if ident, isIdent := stmt.Target.(*ast.Identifier); isIdent {
 		sym, ok := c.currentScope.Resolve(ident.Name)
 		if !ok {
+			// If not found, define it in the current scope.
+			// If currentScope is global, it's a global. Otherwise, it's local.
 			if c.currentScope == c.globals {
 				sym = c.globals.DefineGlobal(ident.Name)
 			} else {
@@ -404,21 +406,35 @@ func (c *Compiler) compileListLiteral(expr *ast.ListLiteral) error {
 			return err
 		}
 	}
-	c.emit(OpArray, len(expr.Elements))
+	numElements := len(expr.Elements)
+	c.emit(OpArray, numElements)
 	return nil
 }
 
 // compileTableLiteral handles table literal creation.
 func (c *Compiler) compileTableLiteral(expr *ast.TableLiteral) error {
-	for _, field := range expr.Fields { // Corrected: Use expr.Fields
-		if err := c.compileExpression(field.Key); err != nil {
-			return err
+	for _, field := range expr.Fields {
+		// Handle table keys: if it's an Identifier, treat its name as a string literal.
+		// Otherwise, compile it as a regular expression.
+		switch key := field.Key.(type) {
+		case *ast.Identifier:
+			c.emitConstant(types.NewString(key.Name))
+		case *ast.StringLiteral: // Explicitly handle string literals as keys
+			c.emitConstant(types.NewString(key.Value))
+		default:
+			// For any other expression type (e.g., `{"key" + "name" = 10}`),
+			// compile the expression and expect it to resolve to a string at runtime.
+			if err := c.compileExpression(field.Key); err != nil {
+				return err
+			}
 		}
+
 		if err := c.compileExpression(field.Value); err != nil {
 			return err
 		}
 	}
-	c.emit(OpTable, len(expr.Fields)) // Corrected: Use expr.Fields
+	numFields := len(expr.Fields)
+	c.emit(OpTable, numFields)
 	return nil
 }
 
@@ -435,13 +451,23 @@ func (c *Compiler) compileTupleLiteral(expr *ast.TupleLiteral) error {
 
 // compileFuncDef compiles a function definition.
 func (c *Compiler) compileFuncDef(stmt *ast.FunctionDef) error {
-	c.enterScope(true)
+	// 1. Save the current instructions slice for the outer scope
+	outerInstructions := c.instructions
+	c.instructions = make(Instructions, 0) // Initialize a NEW slice for this function's instructions
+
+	// 2. Create the function's scope and set it as current.
+	c.enterScope(true)          // This creates the function's scope and sets c.currentScope to it.
+	funcScope := c.currentScope // Now funcScope truly points to the function's symbol table.
 
 	for _, param := range stmt.Params {
-		c.currentScope.DefineParameter(param.Name)
+		funcScope.DefineParameter(param.Name) // Define parameters directly in funcScope
 	}
 
+	// 3. Compile the function body using the new (function-specific) instructions slice.
 	if err := c.compileStatement(stmt.Body); err != nil {
+		// IMPORTANT: If there's an error, you must restore instructions before returning
+		c.instructions = outerInstructions
+		c.leaveScope()
 		return err
 	}
 
@@ -450,16 +476,21 @@ func (c *Compiler) compileFuncDef(stmt *ast.FunctionDef) error {
 		c.emit(OpReturn)
 	}
 
+	// 4. Capture the compiled instructions for this function.
 	functionInstructions := c.instructions
-	functionNumLocals := c.currentScope.NumDefinitions()
+
+	// Get numDefinitions from funcScope, which correctly accumulated parameters and direct locals.
+	functionNumLocals := funcScope.NumDefinitions()
 	functionNumParameters := len(stmt.Params)
 
-	freeSymbols := c.currentScope.FreeSymbols()
+	freeSymbols := funcScope.FreeSymbols() // Get free symbols from the function's scope
 
+	// 5. Restore the outer scope and its instructions.
 	c.leaveScope()
+	c.instructions = outerInstructions // Restore the instructions slice for the outer scope
 
 	compiledFn := &types.CompiledFunction{
-		Instructions:  functionInstructions,
+		Instructions:  functionInstructions, // This is the function's bytecode
 		NumLocals:     functionNumLocals,
 		NumParameters: functionNumParameters,
 		FreeCount:     len(freeSymbols),
@@ -468,27 +499,31 @@ func (c *Compiler) compileFuncDef(stmt *ast.FunctionDef) error {
 	fnConstIndex := len(c.constants)
 	c.constants = append(c.constants, compiledFn)
 
+	// Emit instructions to push captured free variables onto the stack
 	for _, sym := range freeSymbols {
+		// Resolve in the *outer scope* (which is now c.currentScope)
 		outerSym, ok := c.currentScope.Resolve(sym.Name)
 		if !ok {
-			return fmt.Errorf("internal compiler error: free variable '%s' not found in outer scope", sym.Name)
+			return fmt.Errorf("internal compiler error: free variable '%s' not found in outer scope during closure compilation", sym.Name)
 		}
+
 		switch outerSym.Kind {
 		case Global:
 			c.emit(OpGetGlobal, outerSym.Index)
 		case Local, Parameter:
 			c.emit(OpGetLocal, outerSym.Index)
 		case Free:
-			c.emit(OpGetFree, sym.Index) // Use sym.Index for free variables
+			c.emit(OpGetFree, outerSym.Index) // Use outerSym.Index for nested free variables
 		case Builtin:
 			c.emit(OpGetGlobal, outerSym.Index)
 		default:
-			return fmt.Errorf("unsupported free variable kind: %s for '%s'", outerSym.Kind, outerSym.Name)
+			return fmt.Errorf("unsupported free variable kind for closure capture: %s for '%s'", outerSym.Kind, sym.Name)
 		}
 	}
 
 	c.emit(OpClosure, fnConstIndex, len(freeSymbols))
 
+	// Define the function name in the current (outer) scope
 	funcSym, ok := c.currentScope.Resolve(stmt.Name)
 	if !ok {
 		if c.currentScope == c.globals {
@@ -504,7 +539,7 @@ func (c *Compiler) compileFuncDef(stmt *ast.FunctionDef) error {
 	case Local, Parameter:
 		c.emit(OpSetLocal, funcSym.Index)
 	case Free:
-		c.emit(OpSetFree, funcSym.Index) // Use funcSym.Index for setting free variables
+		c.emit(OpSetFree, funcSym.Index)
 	default:
 		return fmt.Errorf("cannot assign function to %s %s", funcSym.Kind, stmt.Name)
 	}
@@ -566,6 +601,24 @@ func (c *Compiler) patchJump(jumpPos, target int) {
 	offset := target - (jumpPos + 3)
 	c.instructions[jumpPos+1] = byte(offset >> 8)
 	c.instructions[jumpPos+2] = byte(offset)
+}
+
+// enterScope creates and enters a new symbol table scope.
+func (c *Compiler) enterScope(isFunction bool) {
+	outer := c.currentScope
+	newScope := NewEnclosedSymbolTable(outer, isFunction)
+	c.symbolStack = append(c.symbolStack, newScope)
+	c.currentScope = newScope
+	c.returned = false
+}
+
+// leaveScope exits the current symbol table scope.
+func (c *Compiler) leaveScope() {
+	if len(c.symbolStack) <= 1 {
+		return
+	}
+	c.symbolStack = c.symbolStack[:len(c.symbolStack)-1]
+	c.currentScope = c.symbolStack[len(c.symbolStack)-1]
 }
 
 // compileIf compiles an if statement with optional else.
@@ -658,25 +711,4 @@ func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
 	c.loopJumpStack = c.loopJumpStack[:len(c.loopJumpStack)-1]
 
 	return nil
-}
-
-// enterScope creates and enters a new symbol table scope.
-func (c *Compiler) enterScope(isFunction bool) {
-	outer := c.currentScope
-	newScope := NewEnclosedSymbolTable(outer, isFunction)
-	c.symbolStack = append(c.symbolStack, newScope)
-	c.currentScope = newScope
-	c.returned = false
-	if isFunction {
-		c.instructions = make(Instructions, 0)
-	}
-}
-
-// leaveScope exits the current symbol table scope.
-func (c *Compiler) leaveScope() {
-	if len(c.symbolStack) <= 1 {
-		return
-	}
-	c.symbolStack = c.symbolStack[:len(c.symbolStack)-1]
-	c.currentScope = c.symbolStack[len(c.symbolStack)-1]
 }

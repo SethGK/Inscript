@@ -1,3 +1,4 @@
+// Package vm implements the Inscript virtual machine.
 package vm
 
 import (
@@ -14,16 +15,17 @@ import (
 const StackSize = 2048
 const MaxFrames = 1024
 
+// VM represents the Inscript Virtual Machine.
 type VM struct {
 	constants []types.Value
 
 	stack []types.Value
-	sp    int // Stack pointer
+	sp    int // Stack pointer: points to the next free slot on the stack
 
 	globals []types.Value
 
 	frames      []*Frame // Call frames for function execution
-	framesIndex int
+	framesIndex int      // Current frame index - points to the next free frame slot
 
 	outputWriter io.Writer
 }
@@ -31,11 +33,12 @@ type VM struct {
 // Frame represents a single call frame for function execution.
 type Frame struct {
 	closure     *types.Closure // The closure being executed
-	ip          int            // Instruction pointer
-	basePointer int
+	ip          int            // Instruction pointer: points to the next instruction to execute
+	basePointer int            // Base pointer: points to the first slot in the stack used by this frame (for locals and arguments)
 }
 
 // NewFrame creates a new call frame.
+// basePointer is the stack index where this frame's locals and arguments begin.
 func NewFrame(closure *types.Closure, basePointer int) *Frame {
 	return &Frame{
 		closure:     closure,
@@ -50,6 +53,7 @@ func (f *Frame) Instructions() compiler.Instructions {
 }
 
 // New creates a new VM instance.
+// It takes the bytecode compiled by the compiler package.
 func New(bytecode *compiler.Bytecode) *VM {
 	// The main program is treated as a function (the entry point).
 	mainFn := &types.CompiledFunction{
@@ -120,14 +124,15 @@ func (vm *VM) push(obj types.Value) error {
 }
 
 // pop pops a value from the stack.
-func (vm *VM) pop() types.Value {
+// It now returns an error if the stack is empty.
+func (vm *VM) pop() (types.Value, error) {
 	if vm.sp == 0 {
-		return types.NewError("stack underflow: attempted to pop from empty stack")
+		return nil, types.NewError("stack underflow: attempted to pop from empty stack")
 	}
 	vm.sp--
 	obj := vm.stack[vm.sp]
 	vm.stack[vm.sp] = nil
-	return obj
+	return obj, nil
 }
 
 // Run executes the compiled bytecode.
@@ -143,10 +148,11 @@ func (vm *VM) Run() error {
 
 		if ip >= len(instructions) {
 			if vm.framesIndex > 1 {
-				// If not the main program, pop the frame and push nil as return value
+				// If not the main program, pop the frame and push nil as return value.
+				// The stack pointer should be reset to the base pointer of the previous frame.
 				frame := vm.popFrame()
-				vm.sp = frame.basePointer - 1 // Clean up stack for arguments and locals
-				if err := vm.push(&types.Nil{}); err != nil {
+				vm.sp = frame.basePointer                     // Reset sp to where the callee was
+				if err := vm.push(&types.Nil{}); err != nil { // Push return value
 					return err
 				}
 				continue
@@ -166,7 +172,9 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpPop:
-			vm.pop()
+			if _, err := vm.pop(); err != nil {
+				return err
+			}
 
 		case compiler.OpTrue:
 			err = vm.push(types.NewBoolean(true))
@@ -197,14 +205,20 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpBang: // Logical NOT
-			operand := vm.pop()
+			operand, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			err = vm.push(types.NewBoolean(!isTruthy(operand)))
 			if err != nil {
 				return err
 			}
 
 		case compiler.OpBitNot: // Bitwise NOT
-			operand := vm.pop()
+			operand, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			result, bitNotErr := vm.executeUnaryBitwiseNot(operand)
 			if bitNotErr != nil {
 				return bitNotErr
@@ -215,7 +229,10 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpMinus: // Negation
-			operand := vm.pop()
+			operand, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			switch val := operand.(type) {
 			case *types.Integer:
 				if err := vm.push(types.NewInteger(-val.Value)); err != nil {
@@ -240,12 +257,9 @@ func (vm *VM) Run() error {
 			currentFrame.ip += bytesRead
 			condition := vm.StackTop() // Peek the condition
 			if !isTruthy(condition) {
-				// If condition is falsy, we jump. The falsy value remains on stack as the result.
 				currentFrame.ip += offset
-			} else {
-				// If condition is truthy, we don't jump. The next instruction (OpPop) will remove it.
-				// No action needed here.
 			}
+			// The value is popped by a subsequent OpPop in the compiler's output for logical AND/OR
 
 		case compiler.OpJump:
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
@@ -257,17 +271,17 @@ func (vm *VM) Run() error {
 			currentFrame.ip += bytesRead
 			condition := vm.StackTop() // Peek the condition
 			if isTruthy(condition) {
-				// If condition is truthy, we jump. The truthy value remains on stack as the result.
 				currentFrame.ip += offset
-			} else {
-				// If condition is falsy, we don't jump. The next instruction (OpPop) will remove it.
-				// No action needed here.
 			}
+			// The value is popped by a subsequent OpPop in the compiler's output for logical AND/OR
 
 		case compiler.OpSetGlobal:
 			globalIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
-			value := vm.pop()
+			value, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			if int(globalIndex) >= len(vm.globals) {
 				return types.NewError("global variable index out of bounds: %d (max %d)", globalIndex, len(vm.globals)-1)
 			}
@@ -287,17 +301,24 @@ func (vm *VM) Run() error {
 		case compiler.OpSetLocal:
 			localIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
-			value := vm.pop()
-			if currentFrame.basePointer+localIndex >= len(vm.stack) { // Check against stack size
-				return types.NewError("local variable index out of bounds: %d (basePointer %d, stack size %d)", localIndex, currentFrame.basePointer, len(vm.stack))
+			value, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			// The localIndex is relative to basePointer.
+			// The check should be if localIndex is within the allocated local slots for this frame.
+			if localIndex < 0 || localIndex >= currentFrame.closure.Fn.NumLocals {
+				return types.NewError("local variable index %d out of bounds for function with %d local slots. This indicates a compiler bug.", localIndex, currentFrame.closure.Fn.NumLocals)
 			}
 			vm.stack[currentFrame.basePointer+localIndex] = value
 
 		case compiler.OpGetLocal:
 			localIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
-			if currentFrame.basePointer+localIndex >= len(vm.stack) { // Check against stack size
-				return types.NewError("local variable index out of bounds: %d (basePointer %d, stack size %d)", localIndex, currentFrame.basePointer, len(vm.stack))
+			// The localIndex is relative to basePointer.
+			// The check should be if localIndex is within the allocated local slots for this frame.
+			if localIndex < 0 || localIndex >= currentFrame.closure.Fn.NumLocals {
+				return types.NewError("local variable index %d out of bounds for function with %d local slots. This indicates a compiler bug.", localIndex, currentFrame.closure.Fn.NumLocals)
 			}
 			err = vm.push(vm.stack[currentFrame.basePointer+localIndex])
 			if err != nil {
@@ -307,9 +328,12 @@ func (vm *VM) Run() error {
 		case compiler.OpSetFree: // New opcode for setting free variables
 			freeIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
-			value := vm.pop()
+			value, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			if int(freeIndex) >= len(currentFrame.closure.Free) {
-				return types.NewError("free variable index out of bounds for set: %d (max %d)", freeIndex, len(currentFrame.closure.Free)-1)
+				return types.NewError("free variable index %d out of bounds for closure with %d free variables. This indicates a compiler bug.", freeIndex, len(currentFrame.closure.Free))
 			}
 			currentFrame.closure.Free[freeIndex] = value
 
@@ -317,7 +341,7 @@ func (vm *VM) Run() error {
 			freeIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
 			if int(freeIndex) >= len(currentFrame.closure.Free) {
-				return types.NewError("free variable index out of bounds: %d (max %d)", freeIndex, len(currentFrame.closure.Free)-1)
+				return types.NewError("free variable index %d out of bounds for closure with %d free variables. This indicates a compiler bug.", freeIndex, len(currentFrame.closure.Free))
 			}
 			err = vm.push(currentFrame.closure.Free[freeIndex])
 			if err != nil {
@@ -337,8 +361,13 @@ func (vm *VM) Run() error {
 
 			frees := make([]types.Value, freeCount)
 			// Free variables are pushed onto the stack before OpClosure.
+			// Pop them in reverse order to maintain their original order.
 			for i := freeCount - 1; i >= 0; i-- {
-				frees[i] = vm.pop()
+				freedVal, err := vm.pop()
+				if err != nil {
+					return err
+				}
+				frees[i] = freedVal
 			}
 			clo := &types.Closure{Fn: compiledFn, Free: frees}
 			err = vm.push(clo)
@@ -350,8 +379,13 @@ func (vm *VM) Run() error {
 			numElements, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
 			elements := make([]types.Value, numElements)
+			// Elements are pushed in order, so pop them in reverse to build the list
 			for i := numElements - 1; i >= 0; i-- {
-				elements[i] = vm.pop()
+				el, err := vm.pop()
+				if err != nil {
+					return err
+				}
+				elements[i] = el
 			}
 			err = vm.push(types.NewList(elements...))
 			if err != nil {
@@ -363,9 +397,17 @@ func (vm *VM) Run() error {
 			currentFrame.ip += bytesRead
 
 			pairs := make([]types.TablePair, numPairs)
+			// Pairs are pushed as (key, value) pairs. Pop value then key.
+			// Pop in reverse order of how they were pushed.
 			for i := numPairs - 1; i >= 0; i-- {
-				value := vm.pop()
-				keyVal := vm.pop()
+				value, err := vm.pop()
+				if err != nil {
+					return err
+				}
+				keyVal, err := vm.pop()
+				if err != nil {
+					return err
+				}
 				keyStr, ok := keyVal.(*types.String)
 				if !ok {
 					return types.NewError("table key must be a string, got %s", keyVal.Type())
@@ -378,8 +420,14 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpIndex:
-			index := vm.pop()
-			aggregate := vm.pop()
+			index, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			aggregate, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			result, getErr := aggregate.GetIndex(index)
 			if getErr != nil {
 				return types.NewError("runtime error: %s", getErr.Error())
@@ -390,13 +438,23 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpSetIndex:
-			value := vm.pop()
-			index := vm.pop()
-			aggregate := vm.pop()
+			value, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			index, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			aggregate, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			setErr := aggregate.SetIndex(index, value)
 			if setErr != nil {
 				return types.NewError("runtime error: %s", setErr.Error())
 			}
+			// SetIndex typically leaves the assigned value on stack
 			err = vm.push(value)
 			if err != nil {
 				return err
@@ -407,16 +465,22 @@ func (vm *VM) Run() error {
 			currentFrame.ip += bytesRead
 			args := make([]string, numExprs)
 			// Pop elements from the stack (they come off right-to-left)
+			// and place them into the 'args' slice in the correct left-to-right order.
 			for i := 0; i < int(numExprs); i++ {
-				// The first item popped (rightmost in print statement) goes to the last slot in args.
-				// The last item popped (leftmost in print statement) goes to the first slot in args.
-				args[int(numExprs)-1-i] = vm.pop().Inspect()
+				poppedVal, err := vm.pop()
+				if err != nil {
+					return err
+				}
+				args[int(numExprs)-1-i] = poppedVal.Inspect()
 			}
 			// Join the arguments with a space and print the single line.
 			fmt.Fprintln(vm.outputWriter, strings.Join(args, " "))
 
 		case compiler.OpGetIter:
-			iterable := vm.pop()
+			iterable, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			iter, getIterErr := iterable.GetIterator()
 			if getIterErr != nil {
 				return types.NewError("runtime error: %s", getIterErr.Error())
@@ -429,7 +493,10 @@ func (vm *VM) Run() error {
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
 
-			iteratorVal := vm.pop() // Pop the iterator to work with it
+			iteratorVal, err := vm.pop() // Pop the iterator
+			if err != nil {
+				return err
+			}
 			iterator, ok := iteratorVal.(types.Iterator)
 			if !ok {
 				return types.NewError("object is not an iterator: %s", iteratorVal.Type())
@@ -441,18 +508,18 @@ func (vm *VM) Run() error {
 			}
 
 			if !hasNext {
-				// If no more elements, push nil and jump to the 'after loop' instruction
+				// If no more elements, push nil as the loop variable value.
 				if err := vm.push(&types.Nil{}); err != nil {
 					return err
 				}
 				currentFrame.ip += offset // Jump to exit if no more elements
 			} else {
-				// If there are more elements, push the next value
-				if err := vm.push(nextVal); err != nil {
+				// Push the iterator back for the next iteration FIRST
+				if err := vm.push(iterator); err != nil {
 					return err
 				}
-				// And push the iterator back for the next iteration
-				if err := vm.push(iterator); err != nil {
+				// Then push next value ON TOP OF THE ITERATOR
+				if err := vm.push(nextVal); err != nil {
 					return err
 				}
 			}
@@ -461,8 +528,15 @@ func (vm *VM) Run() error {
 			numArgs, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
 
+			// The callee is located just below the arguments on the stack.
+			// vm.sp points to the next free slot.
+			// So, vm.sp - 1 is the top of stack (last argument).
+			// vm.sp - 1 - numArgs is the callee.
 			calleePos := vm.sp - int(numArgs) - 1
-			callee := vm.stack[calleePos]
+			if calleePos < 0 || calleePos >= vm.sp { // Defensive check for calleePos validity
+				return types.NewError("runtime error: invalid callee position on stack. Stack pointer: %d, NumArgs: %d", vm.sp, numArgs)
+			}
+			callee := vm.stack[calleePos] // Peek, not pop
 
 			closure, ok := callee.(*types.Closure)
 			if !ok {
@@ -485,12 +559,15 @@ func (vm *VM) Run() error {
 			vm.sp = newFrame.basePointer + closure.Fn.NumLocals
 
 		case compiler.OpReturnValue:
-			returnValue := vm.pop() // Pop the return value
+			returnValue, err := vm.pop()
+			if err != nil {
+				return err
+			}
 
-			poppedFrame := vm.popFrame() // Pop the current frame
+			poppedFrame := vm.popFrame()
 
 			// Clean up stack for arguments and locals of the popped frame
-			vm.sp = poppedFrame.basePointer
+			vm.sp = poppedFrame.basePointer // Reset sp to where the callee was
 
 			err = vm.push(returnValue) // Push the return value onto the previous frame's stack
 			if err != nil {
@@ -498,10 +575,10 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpReturn:
-			poppedFrame := vm.popFrame() // Pop the current frame
+			poppedFrame := vm.popFrame()
 
 			// Clean up stack for arguments and locals of the popped frame
-			vm.sp = poppedFrame.basePointer
+			vm.sp = poppedFrame.basePointer // Reset sp to where the callee was
 
 			err = vm.push(&types.Nil{}) // Push nil as implicit return value
 			if err != nil {
@@ -509,12 +586,17 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpImport: // Handle import statement
-			pathVal := vm.pop()
+			pathVal, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			pathStr, ok := pathVal.(*types.String)
 			if !ok {
 				return types.NewError("import path must be a string, got %s", pathVal.Type())
 			}
 			// TODO: Implement actual module loading/compilation/execution here.
+			// This would typically involve a module cache to avoid re-importing.
+			// For now, we'll just print a debug message and push nil.
 			fmt.Fprintf(vm.outputWriter, "DEBUG: Attempting to import module: %s (actual import logic not yet implemented)\n", pathStr.Value)
 			err = vm.push(&types.Nil{}) // Push nil for now, representing the imported module
 			if err != nil {
@@ -529,6 +611,10 @@ func (vm *VM) Run() error {
 }
 
 // LastPoppedStackElem returns the last element popped from the stack.
+// Note: This method's behavior is tricky. If you need the value *after* a pop,
+// it's already returned by `pop()`. This method returns the element at `vm.stack[vm.sp]`
+// which is the new top of the stack after `sp` has been decremented by `pop()`.
+// For practical purposes, it's often better to capture the return value of `pop()`.
 func (vm *VM) LastPoppedStackElem() types.Value {
 	if vm.sp == 0 {
 		return nil
@@ -549,10 +635,30 @@ func isTruthy(obj types.Value) bool {
 
 // executeBinaryOperation handles arithmetic and power operations.
 func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
-	right := vm.pop()
-	left := vm.pop()
+	right, err := vm.pop()
+	if err != nil {
+		return err
+	}
+	left, err := vm.pop()
+	if err != nil {
+		return err
+	}
 
-	// String concatenation for OpAdd
+	// --- NEW LIST CONCATENATION LOGIC ---
+	if op == compiler.OpAdd && left.Type() == types.LIST_OBJ && right.Type() == types.LIST_OBJ {
+		leftList := left.(*types.List)
+		rightList := right.(*types.List)
+
+		// Create a new slice for the combined elements
+		newElements := make([]types.Value, len(leftList.Elements)+len(rightList.Elements))
+		copy(newElements, leftList.Elements)
+		copy(newElements[len(leftList.Elements):], rightList.Elements)
+
+		return vm.push(types.NewList(newElements...)) // FIX: Added '...' spread operator
+	}
+	// --- END NEW LIST CONCATENATION LOGIC ---
+
+	// String concatenation for OpAdd (keep this, it's correct)
 	if op == compiler.OpAdd && left.Type() == types.STRING_OBJ && right.Type() == types.STRING_OBJ {
 		leftStr := left.(*types.String).Value
 		rightStr := right.(*types.String).Value
@@ -562,13 +668,14 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 	// Type checking for numeric operations
 	if (left.Type() != types.INTEGER_OBJ && left.Type() != types.FLOAT_OBJ) ||
 		(right.Type() != types.INTEGER_OBJ && right.Type() != types.FLOAT_OBJ) {
+		// If it's not numbers and not handled above (like lists or strings), it's an error
 		return types.NewError("type mismatch for %s: %s %s %s", op.String(), left.Type(), op.String(), right.Type())
 	}
 
 	var result types.Value
 
 	switch op {
-	case compiler.OpAdd:
+	case compiler.OpAdd: // Now this will only handle numbers (lists and strings are handled above)
 		if left.Type() == types.INTEGER_OBJ && right.Type() == types.INTEGER_OBJ {
 			result = types.NewInteger(left.(*types.Integer).Value + right.(*types.Integer).Value)
 		} else {
@@ -592,36 +699,49 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 			rVal := toFloat64(right)
 			result = types.NewFloat(lVal * rVal)
 		}
-	case compiler.OpDiv: // Standard division (float result if any operand is float)
-		if (right.Type() == types.INTEGER_OBJ && right.(*types.Integer).Value == 0) ||
-			(right.Type() == types.FLOAT_OBJ && right.(*types.Float).Value == 0.0) {
-			return types.NewError("division by zero")
+	case compiler.OpDiv:
+		if left.Type() == types.INTEGER_OBJ && right.Type() == types.INTEGER_OBJ {
+			// Integer division with float result if not evenly divisible (common in many languages)
+			if right.(*types.Integer).Value == 0 {
+				return types.NewError("division by zero")
+			}
+			result = types.NewFloat(float64(left.(*types.Integer).Value) / float64(right.(*types.Integer).Value))
+		} else {
+			lVal := toFloat64(left)
+			rVal := toFloat64(right)
+			if rVal == 0.0 {
+				return types.NewError("division by zero")
+			}
+			result = types.NewFloat(lVal / rVal)
 		}
-		lVal := toFloat64(left)
-		rVal := toFloat64(right)
-		result = types.NewFloat(lVal / rVal)
 	case compiler.OpMod:
-		if left.Type() != types.INTEGER_OBJ || right.Type() != types.INTEGER_OBJ {
-			return types.NewError("type mismatch for modulo: expected Integer %% Integer, got %s %% %s", left.Type(), right.Type())
+		if left.Type() == types.INTEGER_OBJ && right.Type() == types.INTEGER_OBJ {
+			if right.(*types.Integer).Value == 0 {
+				return types.NewError("modulo by zero")
+			}
+			result = types.NewInteger(left.(*types.Integer).Value % right.(*types.Integer).Value)
+		} else {
+			// Modulo for floats is generally fmod in math libraries
+			lVal := toFloat64(left)
+			rVal := toFloat64(right)
+			if rVal == 0.0 {
+				return types.NewError("modulo by zero")
+			}
+			result = types.NewFloat(math.Mod(lVal, rVal))
 		}
-		if right.(*types.Integer).Value == 0 {
-			return types.NewError("modulo by zero")
-		}
-		result = types.NewInteger(left.(*types.Integer).Value % right.(*types.Integer).Value)
-	case compiler.OpPow: // Power operation
+	case compiler.OpPow:
 		lVal := toFloat64(left)
 		rVal := toFloat64(right)
 		result = types.NewFloat(math.Pow(lVal, rVal))
-	case compiler.OpIDiv: // Integer division
-		if left.Type() != types.INTEGER_OBJ || right.Type() != types.INTEGER_OBJ {
-			return types.NewError("type mismatch for integer division: expected Integer // Integer, got %s // %s", left.Type(), right.Type())
-		}
-		if right.(*types.Integer).Value == 0 {
+	case compiler.OpIDiv: // Integer division (floor division)
+		lVal := toFloat64(left)
+		rVal := toFloat64(right)
+		if rVal == 0.0 {
 			return types.NewError("integer division by zero")
 		}
-		result = types.NewInteger(left.(*types.Integer).Value / right.(*types.Integer).Value)
+		result = types.NewInteger(int64(math.Floor(lVal / rVal)))
 	default:
-		return types.NewError("unsupported binary operation: %s", op)
+		return types.NewError("unknown operator for binary operation: %s", op.String())
 	}
 
 	return vm.push(result)
@@ -629,8 +749,14 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 
 // executeBitwiseOperation handles binary bitwise operations.
 func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
-	right := vm.pop()
-	left := vm.pop()
+	right, err := vm.pop()
+	if err != nil {
+		return err
+	}
+	left, err := vm.pop()
+	if err != nil {
+		return err
+	}
 
 	if left.Type() != types.INTEGER_OBJ || right.Type() != types.INTEGER_OBJ {
 		return types.NewError("type mismatch for bitwise operation %s: expected Integer %s Integer, got %s %s %s", op.String(), op.String(), left.Type(), op.String(), right.Type())
@@ -673,23 +799,29 @@ func (vm *VM) executeUnaryBitwiseNot(operand types.Value) (types.Value, error) {
 }
 
 // toFloat64 safely converts an Integer or Float Value to float64.
-func toFloat64(val types.Value) float64 {
-	if i, ok := val.(*types.Integer); ok {
+func toFloat64(obj types.Value) float64 {
+	if i, ok := obj.(*types.Integer); ok {
 		return float64(i.Value)
 	}
-	if f, ok := val.(*types.Float); ok {
+	if f, ok := obj.(*types.Float); ok {
 		return f.Value
 	}
-	return 0.0 // Should ideally be an error or panic in a robust system
+	return 0.0 // Should be caught by type checks earlier
 }
 
 // executeComparisonOperation handles comparison operations.
 func (vm *VM) executeComparisonOperation(op compiler.Opcode) error {
-	right := vm.pop()
-	left := vm.pop()
+	right, err := vm.pop()
+	if err != nil {
+		return err
+	}
+	left, err := vm.pop()
+	if err != nil {
+		return err
+	}
 
 	var result bool
-	var err error
+	var errCmp error
 
 	switch op {
 	case compiler.OpEqual:
@@ -698,30 +830,30 @@ func (vm *VM) executeComparisonOperation(op compiler.Opcode) error {
 		result = !left.Equals(right)
 	case compiler.OpGreaterThan:
 		var cmp int
-		cmp, err = left.Compare(right)
-		if err != nil {
-			return types.NewError("runtime error: %s", err.Error())
+		cmp, errCmp = left.Compare(right)
+		if errCmp != nil {
+			return types.NewError("runtime error: %s", errCmp.Error())
 		}
 		result = cmp > 0
 	case compiler.OpLessThan:
 		var cmp int
-		cmp, err = left.Compare(right)
-		if err != nil {
-			return types.NewError("runtime error: %s", err.Error())
+		cmp, errCmp = left.Compare(right)
+		if errCmp != nil {
+			return types.NewError("runtime error: %s", errCmp.Error())
 		}
 		result = cmp < 0
-	case compiler.OpGreaterEqual:
+	case compiler.OpGreaterEqual: // New comparison
 		var cmp int
-		cmp, err = left.Compare(right)
-		if err != nil {
-			return types.NewError("runtime error: %s", err.Error())
+		cmp, errCmp = left.Compare(right)
+		if errCmp != nil {
+			return types.NewError("runtime error: %s", errCmp.Error())
 		}
 		result = cmp >= 0
-	case compiler.OpLessEqual:
+	case compiler.OpLessEqual: // New comparison
 		var cmp int
-		cmp, err = left.Compare(right)
-		if err != nil {
-			return types.NewError("runtime error: %s", err.Error())
+		cmp, errCmp = left.Compare(right)
+		if errCmp != nil {
+			return types.NewError("runtime error: %s", errCmp.Error())
 		}
 		result = cmp <= 0
 	default:

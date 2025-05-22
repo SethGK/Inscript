@@ -3,10 +3,8 @@ grammar Inscript;
 // Parser Rules
 
 program
-    : (   statement NEWLINE*    
-      |   NEWLINE               
-      )*
-      EOF
+    : (statement)*
+        EOF
     ;
 
 statement
@@ -25,11 +23,9 @@ statement
     ;
 
 block
-    : LBRACE
-      (   statement NEWLINE*    // statements in a block…
-      |   NEWLINE               // …or blank lines by themselves
-      )*
-      RBRACE
+    : LBRACE // Statements in a block, with whitespace (including newlines) implicitly skipped
+        (statement)*
+        RBRACE
     ;
 
 exprStmt: expression;
@@ -212,5 +208,4 @@ fragment ESC_SEQ: '\\' [btnr"'\\];
 COMMENT: '#' ~[\r\n]* -> skip;
 BLOCK_COMMENT: '/*' .*? '*/' -> skip;
 
-NEWLINE: [\r\n]+;
-WS: [ \t]+ -> skip;
+WS: [ \t\r\n]+ -> skip; 

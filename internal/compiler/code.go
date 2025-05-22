@@ -3,6 +3,7 @@ package compiler
 
 import (
 	"fmt"
+	"strings" // Added for String() method in Instructions
 
 	"github.com/SethGK/Inscript/internal/types"
 )
@@ -10,42 +11,7 @@ import (
 // Opcode is a single byte code that identifies the operation.
 type Opcode byte
 
-// Instruction widths by opcode: number and byte-width of each operand.
-var operandWidths = map[Opcode][]int{
-	OpConstant:      {2}, // constant pool index (uint16)
-	OpSetGlobal:     {2}, // global name index
-	OpGetGlobal:     {2}, // global name index
-	OpSetLocal:      {1}, // local slot index
-	OpGetLocal:      {1}, // local slot index
-	OpSetFree:       {1}, // free slot index
-	OpGetFree:       {1}, // free slot index
-	OpJump:          {2}, // jump offset
-	OpJumpNotTruthy: {2}, // jump offset
-	OpJumpTruthy:    {2}, // jump offset for 'or'
-	OpCall:          {1}, // argument count
-	OpPrint:         {1}, // number of expressions
-	OpGetIter:       {},  // no operands
-	OpIterNext:      {2}, // exit jump offset
-
-	// New Opcodes and their operand widths
-	OpPow:          {},     // no operands
-	OpIDiv:         {},     // no operands
-	OpBitAnd:       {},     // no operands
-	OpBitOr:        {},     // no operands
-	OpBitXor:       {},     // no operands
-	OpShl:          {},     // no operands
-	OpShr:          {},     // no operands
-	OpGreaterEqual: {},     // no operands
-	OpLessEqual:    {},     // no operands
-	OpBitNot:       {},     // no operands
-	OpClosure:      {2, 1}, // constant pool index (uint16), free variable count (uint8)
-	OpIndex:        {},     // no operands (pops aggregate, index)
-	OpSetIndex:     {},     // no operands (pops aggregate, index, value)
-	OpTable:        {2},    // number of key-value pairs (uint16)
-	OpImport:       {2},    // string constant index for path (uint16)
-}
-
-// Opcode definitions
+// Opcode definitions (iota starts at 0 and increments)
 const (
 	OpConstant Opcode = iota
 	OpPop
@@ -109,12 +75,70 @@ const (
 	OpImport
 )
 
+// Instruction widths by opcode: number and byte-width of each operand.
+// This map MUST be declared AFTER the Opcode constants are defined using iota.
+var operandWidths = map[Opcode][]int{
+	OpConstant:      {2}, // constant pool index (uint16)
+	OpPop:           {},  // Added: no operands
+	OpTrue:          {},  // Added: no operands
+	OpFalse:         {},  // Added: no operands
+	OpEqual:         {},  // Added: no operands
+	OpNotEqual:      {},  // Added: no operands
+	OpGreaterThan:   {},  // Added: no operands
+	OpLessThan:      {},  // Added: no operands
+	OpBang:          {},  // Added: no operands (logical NOT)
+	OpMinus:         {},  // Added: no operands (unary negation)
+	OpAdd:           {},  // Added: no operands
+	OpSub:           {},  // Added: no operands
+	OpMul:           {},  // Added: no operands
+	OpDiv:           {},  // Added: no operands
+	OpMod:           {},  // Added: no operands
+	OpJumpNotTruthy: {2}, // jump offset
+	OpJump:          {2}, // jump offset
+	OpJumpTruthy:    {2}, // jump offset for 'or'
+	OpNull:          {},  // Added: no operands
+	OpGetGlobal:     {2}, // global name index
+	OpSetGlobal:     {2}, // global name index
+	OpGetLocal:      {1}, // local slot index
+	OpSetLocal:      {1}, // local slot index
+	OpGetFree:       {1}, // free slot index
+	OpSetFree:       {1}, // free slot index
+	OpArray:         {2}, // Corrected: Number of elements (uint16)
+	OpCall:          {1}, // argument count
+	OpReturnValue:   {},  // Added: no operands
+	OpReturn:        {},  // Added: no operands
+	OpPrint:         {1}, // number of expressions
+	OpGetIter:       {},  // no operands
+	OpIterNext:      {2}, // exit jump offset
+
+	// New Opcodes and their operand widths
+	OpPow:          {},     // no operands
+	OpIDiv:         {},     // no operands
+	OpBitAnd:       {},     // no operands
+	OpBitOr:        {},     // no operands
+	OpBitXor:       {},     // no operands
+	OpShl:          {},     // no operands
+	OpShr:          {},     // no operands
+	OpGreaterEqual: {},     // no operands
+	OpLessEqual:    {},     // no operands
+	OpBitNot:       {},     // no operands
+	OpClosure:      {2, 1}, // constant pool index (uint16), free variable count (uint8)
+	OpIndex:        {},     // no operands (pops aggregate, index)
+	OpSetIndex:     {},     // no operands (pops aggregate, index, value)
+	OpTable:        {2},    // number of key-value pairs (uint16)
+	OpImport:       {2},    // string constant index for path (uint16)
+}
+
 // Instructions is a slice of bytecode instructions.
 type Instructions []byte
 
 // Make constructs an instruction byte-slice for op and operands.
 func Make(op Opcode, operands ...int) []byte {
-	widths := operandWidths[op]
+	widths, ok := operandWidths[op]
+	if !ok {
+		panic(fmt.Sprintf("unknown opcode %d (%s) in Make function", op, Opcode(op).String()))
+	}
+
 	size := 1
 	for _, w := range widths {
 		size += w
@@ -124,8 +148,13 @@ func Make(op Opcode, operands ...int) []byte {
 	ins[0] = byte(op)
 	offset := 1
 
+	if len(operands) != len(widths) {
+		panic(fmt.Sprintf("mismatched operand count for opcode %s: expected %d, got %d",
+			Opcode(op).String(), len(widths), len(operands)))
+	}
+
 	for i, operand := range operands {
-		width := widths[i]
+		width := widths[i] // This will now be safe as len(operands) matches len(widths)
 		switch width {
 		case 2:
 			ins[offset] = byte(operand >> 8)
@@ -133,9 +162,9 @@ func Make(op Opcode, operands ...int) []byte {
 		case 1:
 			ins[offset] = byte(operand)
 		case 0:
-			// no operand
+			// no operand, do nothing
 		default:
-			panic(fmt.Sprintf("unsupported operand width %d", width))
+			panic(fmt.Sprintf("unsupported operand width %d for opcode %s", width, Opcode(op).String()))
 		}
 		offset += width
 	}
@@ -161,7 +190,13 @@ func ReadOperand(ins Instructions, offset, width int) (int, int) {
 
 // ReadOperands decodes all operands for op starting at offset.
 func ReadOperands(op Opcode, ins Instructions, offset int) ([]int, int) {
-	widths := operandWidths[op]
+	widths, ok := operandWidths[op]
+	if !ok {
+		// This case should ideally not be hit if the bytecode is valid
+		// and all opcodes are defined in operandWidths.
+		return []int{}, 0
+	}
+
 	operands := make([]int, len(widths))
 	bytesRead := 0
 
@@ -180,21 +215,32 @@ func ReadOpcode(ins Instructions, offset int) Opcode {
 
 // String returns a human-readable representation of instructions for debugging.
 func (ins Instructions) String() string {
-	var out string
+	var out strings.Builder
 	i := 0
 	for i < len(ins) {
 		op := ReadOpcode(ins, i)
+
+		// Check if opcode is defined before trying to read operands
+		// This ensures we don't panic on an unknown opcode in operandWidths map
+		_, ok := operandWidths[op]
+		if !ok {
+			fmt.Fprintf(&out, "%04d ERROR: unknown opcode %d\n", i, op)
+			i++ // Advance to avoid infinite loop on unknown opcode
+			continue
+		}
+
 		operands, bytesRead := ReadOperands(op, ins, i+1)
 
-		out += fmt.Sprintf("%04d %s", i, op.String())
+		// Use op.String() directly for the opcode name
+		fmt.Fprintf(&out, "%04d %s", i, op.String())
 		for _, operand := range operands {
-			out += fmt.Sprintf(" %d", operand)
+			fmt.Fprintf(&out, " %d", operand)
 		}
-		out += "\n"
+		fmt.Fprintln(&out)
 
 		i += 1 + bytesRead
 	}
-	return out
+	return out.String()
 }
 
 // String maps opcodes to names.
