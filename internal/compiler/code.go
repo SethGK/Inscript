@@ -176,9 +176,8 @@ func Make(op Opcode, operands ...int) []byte {
 func ReadOperand(ins Instructions, offset, width int) (int, int) {
 	switch width {
 	case 2:
-		hi := int(ins[offset])
-		lo := int(ins[offset+1])
-		return (hi << 8) | lo, 2
+		val := int16(ins[offset])<<8 | int16(ins[offset+1])
+		return int(val), 2
 	case 1:
 		return int(ins[offset]), 1
 	case 0:
