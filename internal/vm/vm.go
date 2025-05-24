@@ -113,26 +113,25 @@ func (vm *VM) StackTop() types.Value {
 	return vm.stack[vm.sp-1]
 }
 
-// push pushes a value onto the stack.
 func (vm *VM) push(obj types.Value) error {
-	if vm.sp >= StackSize {
+	if vm.sp >= StackSize { // StackSize is your max stack capacity
 		return types.NewError("stack overflow")
 	}
 	vm.stack[vm.sp] = obj
 	vm.sp++
+	fmt.Printf("DEBUG: PUSHED %s to SP=%d\n", obj.Inspect(), vm.sp-1) // vm.sp-1 is the index it was pushed to
 	return nil
 }
 
-// pop pops a value from the stack.
-// It now returns an error if the stack is empty.
 func (vm *VM) pop() (types.Value, error) {
 	if vm.sp == 0 {
-		return nil, types.NewError("stack underflow: attempted to pop from empty stack")
+		return nil, types.NewError("stack empty")
 	}
 	vm.sp--
-	obj := vm.stack[vm.sp]
-	vm.stack[vm.sp] = nil
-	return obj, nil
+	popped := vm.stack[vm.sp]
+	vm.stack[vm.sp] = nil                                                // Clear reference to allow GC
+	fmt.Printf("DEBUG: POPPED %s from SP=%d\n", popped.Inspect(), vm.sp) // vm.sp is the index it was popped from
+	return popped, nil
 }
 
 // Run executes the compiled bytecode.
@@ -305,22 +304,15 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
-			// The localIndex is relative to basePointer.
-			// The check should be if localIndex is within the allocated local slots for this frame.
-			if localIndex < 0 || localIndex >= currentFrame.closure.Fn.NumLocals {
-				return types.NewError("local variable index %d out of bounds for function with %d local slots. This indicates a compiler bug.", localIndex, currentFrame.closure.Fn.NumLocals)
-			}
 			vm.stack[currentFrame.basePointer+localIndex] = value
+			fmt.Printf("DEBUG: OpSetLocal %d setting local %d to %s (at stack index %d)\n", localIndex, localIndex, value.Inspect(), currentFrame.basePointer+localIndex)
 
 		case compiler.OpGetLocal:
 			localIndex, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
-			// The localIndex is relative to basePointer.
-			// The check should be if localIndex is within the allocated local slots for this frame.
-			if localIndex < 0 || localIndex >= currentFrame.closure.Fn.NumLocals {
-				return types.NewError("local variable index %d out of bounds for function with %d local slots. This indicates a compiler bug.", localIndex, currentFrame.closure.Fn.NumLocals)
-			}
-			err = vm.push(vm.stack[currentFrame.basePointer+localIndex])
+			valToPush := vm.stack[currentFrame.basePointer+localIndex]
+			fmt.Printf("DEBUG: OpGetLocal %d getting local %d, value: %s (from stack index %d)\n", localIndex, localIndex, valToPush.Inspect(), currentFrame.basePointer+localIndex)
+			err = vm.push(valToPush)
 			if err != nil {
 				return err
 			}
@@ -463,6 +455,10 @@ func (vm *VM) Run() error {
 		case compiler.OpPrint:
 			numExprs, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
+			fmt.Printf("DEBUG: Stack before OpPrint (SP=%d, numExprs=%d):\n", vm.sp, numExprs)
+			for i := 0; i < vm.sp; i++ {
+				fmt.Printf("  [%d]: %+v\n", i, vm.stack[i].Inspect())
+			}
 			args := make([]string, numExprs)
 			// Pop elements from the stack (they come off right-to-left)
 			// and place them into the 'args' slice in the correct left-to-right order.
@@ -493,10 +489,12 @@ func (vm *VM) Run() error {
 			offset, bytesRead := compiler.ReadOperand(instructions, ip+1, 2)
 			currentFrame.ip += bytesRead
 
-			iteratorVal, err := vm.pop() // Pop the iterator
-			if err != nil {
-				return err
+			// Peek at the iterator (don't pop it yet)
+			if vm.sp == 0 {
+				return types.NewError("stack underflow: no iterator on stack")
 			}
+
+			iteratorVal := vm.stack[vm.sp-1] // Peek, don't pop
 			iterator, ok := iteratorVal.(types.Iterator)
 			if !ok {
 				return types.NewError("object is not an iterator: %s", iteratorVal.Type())
@@ -508,17 +506,15 @@ func (vm *VM) Run() error {
 			}
 
 			if !hasNext {
-				// If no more elements, push nil as the loop variable value.
-				if err := vm.push(&types.Nil{}); err != nil {
+				_, err := vm.pop()
+				if err != nil {
 					return err
 				}
-				currentFrame.ip += offset // Jump to exit if no more elements
+				currentFrame.ip += int(offset)
+				fmt.Printf("DEBUG: OpIterNext finished, jumping to %d. Stack top: %v\n", currentFrame.ip, vm.stack[vm.sp-1]) // Add this
+				continue
 			} else {
-				// Push the iterator back for the next iteration FIRST
-				if err := vm.push(iterator); err != nil {
-					return err
-				}
-				// Then push next value ON TOP OF THE ITERATOR
+
 				if err := vm.push(nextVal); err != nil {
 					return err
 				}
@@ -528,34 +524,26 @@ func (vm *VM) Run() error {
 			numArgs, bytesRead := compiler.ReadOperand(instructions, ip+1, 1)
 			currentFrame.ip += bytesRead
 
-			// The callee is located just below the arguments on the stack.
-			// vm.sp points to the next free slot.
-			// So, vm.sp - 1 is the top of stack (last argument).
-			// vm.sp - 1 - numArgs is the callee.
 			calleePos := vm.sp - int(numArgs) - 1
-			if calleePos < 0 || calleePos >= vm.sp { // Defensive check for calleePos validity
-				return types.NewError("runtime error: invalid callee position on stack. Stack pointer: %d, NumArgs: %d", vm.sp, numArgs)
+			if calleePos < 0 || calleePos >= vm.sp {
+				return types.NewError("runtime error: invalid callee position on stack. SP=%d, NumArgs=%d", vm.sp, numArgs)
 			}
-			callee := vm.stack[calleePos] // Peek, not pop
-
+			callee := vm.stack[calleePos]
 			closure, ok := callee.(*types.Closure)
 			if !ok {
 				return types.NewError("call target is not a function or closure: %s", callee.Type())
 			}
-
 			if int(numArgs) != closure.Fn.NumParameters {
 				return types.NewError("wrong number of arguments: expected %d, got %d",
 					closure.Fn.NumParameters, numArgs)
 			}
 
-			newFrame := NewFrame(closure, calleePos)
-
-			err = vm.pushFrame(newFrame)
-			if err != nil {
+			argStart := calleePos + 1
+			newFrame := NewFrame(closure, argStart)
+			if err := vm.pushFrame(newFrame); err != nil {
 				return err
 			}
 
-			// Adjust stack pointer for new frame's locals (arguments are already on stack)
 			vm.sp = newFrame.basePointer + closure.Fn.NumLocals
 
 		case compiler.OpReturnValue:
@@ -563,25 +551,32 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
-
 			poppedFrame := vm.popFrame()
 
-			// Clean up stack for arguments and locals of the popped frame
-			vm.sp = poppedFrame.basePointer // Reset sp to where the callee was
+			if vm.framesIndex > 0 {
 
-			err = vm.push(returnValue) // Push the return value onto the previous frame's stack
-			if err != nil {
+				vm.sp = poppedFrame.basePointer - 1
+			} else {
+
+				vm.sp = poppedFrame.basePointer
+			}
+
+			fmt.Printf("DEBUG: OpReturnValue is pushing: %+v\n", returnValue)
+			if err := vm.push(returnValue); err != nil {
 				return err
 			}
 
 		case compiler.OpReturn:
 			poppedFrame := vm.popFrame()
 
-			// Clean up stack for arguments and locals of the popped frame
-			vm.sp = poppedFrame.basePointer // Reset sp to where the callee was
+			if vm.framesIndex > 0 {
 
-			err = vm.push(&types.Nil{}) // Push nil as implicit return value
-			if err != nil {
+				vm.sp = poppedFrame.basePointer - 1
+			} else {
+				vm.sp = poppedFrame.basePointer
+			}
+
+			if err := vm.push(&types.Nil{}); err != nil {
 				return err
 			}
 

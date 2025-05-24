@@ -92,14 +92,26 @@ func (c *Compiler) compileStatement(s ast.Statement) error {
 		c.returned = true
 
 	case *ast.BlockStmt:
-		c.enterScope(false)
+		inFunc := c.currentScope.isFunctionScope
+
+		if !inFunc {
+			c.enterScope(false)
+		}
+
 		for _, s2 := range stmt.Stmts {
 			if err := c.compileStatement(s2); err != nil {
+
+				if !inFunc {
+					c.leaveScope()
+				}
 				return err
 			}
 		}
-		c.leaveScope()
-		c.returned = false
+
+		if !inFunc {
+			c.leaveScope()
+			c.returned = false
+		}
 
 	case *ast.IfStmt:
 		return c.compileIf(stmt)
@@ -176,8 +188,10 @@ func (c *Compiler) compileAssignment(stmt *ast.AssignStmt) error {
 			c.emit(OpSetGlobal, sym.Index)
 		case Local, Parameter:
 			c.emit(OpSetLocal, sym.Index)
+
 		case Free:
 			c.emit(OpSetFree, sym.Index)
+
 		default:
 			return fmt.Errorf("cannot assign to %s %s", sym.Kind, ident.Name)
 		}
@@ -679,21 +693,17 @@ func (c *Compiler) compileWhile(stmt *ast.WhileStmt) error {
 	return nil
 }
 
-// compileFor compiles a for-in loop.
 func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
+
 	if err := c.compileExpression(stmt.Iterable); err != nil {
 		return err
 	}
+
 	c.emit(OpGetIter)
 
 	loopStart := len(c.instructions)
 
-	breakJumpPos := c.emit(OpJump, 0)
-	continueJumpPos := len(c.instructions)
-
-	c.loopJumpStack = append(c.loopJumpStack, []int{breakJumpPos, continueJumpPos})
-
-	exitPos := c.emit(OpIterNext, 0)
+	exitJumpPos := c.emit(OpIterNext, 0)
 
 	sym := c.currentScope.DefineLocal(stmt.Variable)
 	c.emit(OpSetLocal, sym.Index)
@@ -702,13 +712,14 @@ func (c *Compiler) compileFor(stmt *ast.ForStmt) error {
 		return err
 	}
 
-	c.emit(OpJump, loopStart)
+	backJumpPos := len(c.instructions)
+	backOffset := loopStart - (backJumpPos + 3)
+	fmt.Printf("DEBUG COMPILER: loopStart=%d, backJumpPos=%d, Calculated backOffset=%d\n",
+		loopStart, backJumpPos, backOffset)
+	c.emit(OpJump, backOffset)
 
 	afterLoop := len(c.instructions)
-	c.patchJump(exitPos, afterLoop)
-	c.patchJump(breakJumpPos, afterLoop)
-
-	c.loopJumpStack = c.loopJumpStack[:len(c.loopJumpStack)-1]
+	c.patchJump(exitJumpPos, afterLoop)
 
 	return nil
 }
